@@ -1,0 +1,76 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x12\x00a\x00r\x00g\x00p\x00a\x00r\x00s\x00e\x00r)
+
+[CMake]
+Auto Configure on CMakeLists Changes=true
+Build Directory Count=1
+Current Build Directory Index-主机系统=0
+
+[CMake][CMake Build Directory 0]
+Build Directory Path=/home/lawrence/My_files/Development/C++/argparser/build
+Build Type=Debug
+CMake Binary=/usr/sbin/cmake
+CMake Executable=/usr/sbin/cmake
+Environment Profile=
+Extra Arguments=
+Install Directory=/usr/local
+Runtime=主机系统
+
+[Launch]
+Launch Configurations=Launch Configuration 0,Launch Configuration 1
+
+[Launch][Launch Configuration 0]
+Configured Launch Modes=execute
+Configured Launchers=scriptAppLauncher
+Name=Run Test with Inputing args
+Type=Script Application
+
+[Launch][Launch Configuration 0][Data]
+Arguments=/usr/local/bin/consolepauser /home/lawrence/My_files/Development/C++/argparser/build/app
+EnvironmentGroup=
+Executable=file:///usr/local/bin/runwithargs
+Execute on Remote Host=false
+Interpreter=/usr/bin/konsole -e\s
+Output Filtering Mode=2
+Remote Host=
+Run current file=false
+Working Directory=file:///home/lawrence/My_files/Development/C++/argparser/build/
+
+[Launch][Launch Configuration 1]
+Configured Launch Modes=execute,debug
+Configured Launchers=nativeAppLauncher,gdb
+Name=Test
+Type=Native Application
+
+[Launch][Launch Configuration 1][Data]
+Arguments=-v -iinput.txt
+Break on Start=false
+Debugger Shell=
+Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
+Dependency Action=Nothing
+Display Demangle Names=true
+Display Static Members=false
+EnvironmentGroup=
+Executable=file:///home/lawrence/My_files/Development/C++/argparser
+External Terminal=konsole --hold -e
+GDB Path=
+Kill Before Executing Again=4194304
+LLDB Arguments=
+LLDB Config Script=
+LLDB Environment=
+LLDB Executable=
+LLDB Inherit System Env=true
+LLDB Remote Debugging=false
+LLDB Remote Path=
+LLDB Remote Server=
+Project Target=argparser,app
+Remote GDB Config Script=
+Remote GDB Run Script=
+Remote GDB Shell Script=
+Start With=ApplicationOutput
+Use External Terminal=false
+Working Directory=
+isExecutable=false
+
+[Project]
+VersionControlSupport=kdevgit
