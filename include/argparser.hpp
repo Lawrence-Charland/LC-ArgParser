@@ -207,6 +207,34 @@ enum class ap_defkey
      */
     max_positional_count,
     /**
+     * @brief       Tokens that end the collection of a positional entry. The
+     * value is the token text, compared verbatim against each positional
+     * argument. Defaults to empty, which means no barrier.
+     * @note        Effective for positionals only. A positional is otherwise
+     * limited by its count range alone, so the barrier adds another way to
+     * decide where it stops; options and flags do not use it.
+     * @note        Multiple definition is allowed, and will not cover the
+     * tokens in previous definitions.
+     * @note        The barrier token is not stored in `ap_entry::content`. The
+     * collection stops at it, and the token is consumed together with the
+     * collected positionals (unless `consume` is `false`), so that the
+     * following entries never see it. The arguments after it are left
+     * untouched.
+     * @note        The value is compared literally and is not split at `,`,
+     * unlike `long_name` and `short_name`.
+     * @warning     The value must not be empty.
+     * @warning     `--` cannot be used as a barrier, because the preparser
+     * removes it before the entries are evaluated. Every argument after `--`
+     * is marked as `argparser::ap_arg_style::simple`, so a barrier may look
+     * like an option there, e.g. `-x`.
+     * @warning     The barrier is only reached while the entry is still
+     * collecting values: once `max_positional_count` is fulfilled, the
+     * collection stops before the barrier, which then stays available to the
+     * following entries (and is reported as
+     * `argparser::ap_result::invalid_arguments` if nobody consumes it).
+     */
+    barrier,
+    /**
      * @brief       Minimum count of values for the option. The value must be an
      * integer `>=0`. Defaults to `0`.
      * @warning     The count must not be <0.
@@ -387,6 +415,19 @@ struct ap_entry
     std::unordered_set<char> short_names;
 
     /**
+     * @brief       The tokens that end the collection of this entry, i.e. an
+     * extra constraint on where the positional arguments stop. An empty set
+     * means the collection is limited only by
+     * `argparser::ap_entry::positional_range`.
+     * @note        Used when the entry is a positional; options and flags do
+     * not consult it.
+     * @note        Compared verbatim against each positional argument, and
+     * never stored in `argparser::ap_entry::content`.
+     * @see         argparser::ap_defkey::barrier
+     */
+    std::unordered_set<std::string> barriers;
+
+    /**
      * @brief       The general parsing result of this entry. Defaults to
      * `argparser::ap_result::unparsed`, which an entry keeps until it has been
      * evaluated.
@@ -424,9 +465,9 @@ struct ap_entry
      * @param       definitions     The definitions of how the argument works,
      * applied in order. See `argparser::ap_defkey` for which keys may be
      * repeated.
-     * @throws      std::runtime_error If a definition value is invalid, such as
-     * an empty long name, a short name that is not a single character, or a
-     * count of zero.
+     * @throws      std::runtime_error If a definition value is invalid, such
+     * as an empty long name, a short name that is not a single character, an
+     * empty barrier, or a count of zero.
      * @code{.cpp}
      * using namespace argparser;
      * ap_entry example(

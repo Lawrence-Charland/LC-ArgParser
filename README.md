@@ -27,6 +27,8 @@ English | [简体中文](./README.zh_CN.md)
 - Group-based dispatch for subcommands: `evaluate("subA")`, `fine("subA")`.
 - Validation: minimum/maximum positional count, minimum/maximum option value
   count, maximum flag repetition.
+- Barriers for positionals: a positional entry stops collecting at a registered
+  token such as `|` or `END`; see [Barriers](#barriers).
 - Results are stored on the entries themselves (`general_result`, `content`,
   `repetition`), so no separate result object is needed. `content` serves all
   three types; see [What `content` holds](#what-content-holds).
@@ -47,10 +49,10 @@ English | [简体中文](./README.zh_CN.md)
 ```text
 argparser/
 ├── include/argparser.hpp   public header: declarations + Doxygen comments
-├── argparser.cpp           implementation
-├── main.cpp                scratch driver for manual testing (not part of the API)
+├── src/argparser.cpp       implementation
+├── src/main.cpp            scratch driver for manual testing (not part of the API)
 ├── CMakeLists.txt
-└── CMakePresets.json       "linux-g++" preset
+└── CMakePresets.json       "linux-gcc-debug" / "linux-gcc-release" presets
 ```
 
 `main.cpp` is a test case, not an example: a throwaway program used to exercise
@@ -67,30 +69,34 @@ target and source list with your own; the library itself is not tied to
 With the bundled CMake preset:
 
 ```sh
-cmake --preset linux-g++
-cmake --build out/build/linux-g++ --target app
-./out/build/linux-g++/app subA -i in.txt -o out.txt
+cmake --preset linux-gcc-release
+cmake --build build/linux-gcc-release --target app
+./build/linux-gcc-release/app -A 1 2 -B 3
 ```
+
+`linux-gcc-debug` is the Debug counterpart. Both presets build into
+`build/<preset>` (see `CMakePresets.json`).
 
 With plain CMake:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-./build/app subA -i in.txt -o out.txt
+cmake --build build --target app
+./build/app -A 1 2 -B 3
 ```
 
 Without CMake:
 
 ```sh
-g++ -std=c++17 -Iinclude main.cpp argparser.cpp -o app
+g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp -o app
 ```
 
-The CMake build produces a shared library target `argparser` and the demo
-executable `app`. Only the library is installed by `cmake --install`, the header
-is not installed, and the target keeps its include directory private, so add
-`include/` to your own include path and link `argparser.cpp` (or the built
-library) yourself.
+The CMake build produces a shared library target `argparser` and, when this
+directory is the top-level project, the demo executable `app`. The demo is added
+only in that case; pulled in with `add_subdirectory`, the project contributes
+just the library target. `cmake --install` installs the library together with
+the headers, and the library target exports `include/` as a public include
+directory, so a consumer links `argparser` and includes `<argparser.hpp>`.
 
 ## Quick start
 
@@ -178,15 +184,17 @@ if (app.entry("head").content[0] == "subA")
 }
 ```
 
-The demo driver [main.cpp](./main.cpp) dispatches exactly this way. It exists
-only as a test case, so the command line it accepts will change; right now it
-behaves like this:
+The demo driver [main.cpp](./main.cpp) is only a test case, so the command line
+it accepts will change. It does not dispatch on groups right now: it defines two
+options, `-A/--arrA` and `-B/--arrB`, each taking one to five values, and both
+are required because `min_value_count` is `1`:
 
 ```text
-./app subA -i in.txt -o out.txt   # exit 0
-./app subB -v                     # exit 0
-./app subB -v -v                  # exit 1 (max_repetition is 1)
-./app wrong                       # exit 2
+./app -A 1 2 -B 3               # exit 0
+./app --arrA=7 --arrB=8         # exit 0
+./app -A 1 2 3 4 5 6 -B 9       # exit 1 (max_value_count is 5)
+./app -A 1 2                    # exit 1 (-B is absent, so it reports
+                                #         option_too_few_values)
 ```
 
 ## Supported syntax at a glance
@@ -203,6 +211,51 @@ behaves like this:
 | `--output out.txt`   | long option with a separate value                 |
 | `--`                 | end of options; everything after it is positional |
 | `-`                  | positional value (a lone dash is not an option)   |
+
+## Barriers
+
+A positional entry may register one or more *barriers* with
+`ap_defkey::barrier`. The value is the token text, compared literally against
+each positional argument; repeat the key to register several tokens. When the
+entry reaches a barrier, it stops collecting.
+
+A positional is otherwise bounded by its count range alone, so a barrier is how
+an entry keeps from swallowing everything that follows: it is an extra
+constraint on where the collection ends.
+
+The barrier token is **not** stored in `content`. It is consumed together with
+the collected positionals (unless `consume` is `false`), so the following
+entries never see it, while the arguments after it are left untouched:
+
+```cpp
+ap_instance app({ap_entry("files", ap_type::positional,
+                          {{ap_defkey::barrier, "|"}}),
+                 ap_entry("rest", ap_type::positional, {})});
+app.pre_parse({"app", "a.txt", "b.txt", "|", "c.txt"});
+app.evaluate();
+// files.content == {"a.txt", "b.txt"}
+// rest.content  == {"c.txt"}
+```
+
+Details worth knowing:
+
+- Barriers exist for positionals. `option` and `flag` entries do not use them.
+- The barrier is reached only while the entry is still collecting. Once
+  `max_positional_count` is fulfilled, the loop stops before the barrier, so the
+  barrier stays in the pool and is reported as `invalid_arguments` by
+  `fine(false)` and `errors()`.
+- A barrier may be the first token: the entry then collects nothing and reports
+  `positional_too_few_args` if `min_positional_count` is greater than `0`. The
+  barrier is consumed anyway when `consume` is `true`.
+- The value is literal: unlike `long_name` and `short_name`, it is not split at
+  `,`.
+- An empty barrier is rejected: `{ap_defkey::barrier, ""}` makes the
+  constructor throw `std::runtime_error`.
+- `--` cannot serve as a barrier, because the preparser removes it before the
+  entries are evaluated. Every argument after `--` is `simple`, so a barrier may
+  look like an option there, e.g. `-x`.
+- Leftover arguments after a barrier are simply unconsumed: `fine()` still
+  returns `true` by default, while `fine(false)` and `errors()` report them.
 
 ## What `content` holds
 
@@ -253,6 +306,7 @@ to the same entry, and `repetition` is always `content.size()`. Even
 | `short_name`               | one or more single characters separated by `,`               |
 | `min_positional_count`     | integer `>= 0`, default `0`                                  |
 | `max_positional_count`     | non-zero integer, negative or absent = unlimited, default `-1` |
+| `barrier`                  | literal token that ends the positional collection; repeatable |
 | `min_value_count`          | integer `>= 0`, default `0`                                  |
 | `max_value_count`          | non-zero integer, negative or absent = unlimited, default `-1` |
 | `max_repetition`           | non-zero integer, negative or absent = unlimited, default `-1` |
@@ -265,6 +319,7 @@ to the same entry, and `repetition` is always `content.size()`. Even
 | `type`, `consume`                  | behaviour                               |
 | `positional_range`, `valcnt_range`, `max_repetition` | validation limits  |
 | `long_names`, `short_names`        | accepted names                          |
+| `barriers`                         | tokens that end the positional collection (see [Barriers](#barriers)) |
 | `general_result`                   | `ap_result`, defaults to `unparsed`     |
 | `content`                          | parsing payload; its meaning depends on `type` (see [above](#what-content-holds)) |
 | `repetition`                       | how many times a flag occurred          |

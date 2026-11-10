@@ -26,6 +26,8 @@
 
 - 校验能力：位置参数的最少/最多数量、选项值的最少/最多数量、标志的最大重复次数。
 
+- 位置参数屏障（barrier）：位置参数条目遇到登记的词元（如 `|`、`END`）就停止收集，见[「屏障」](#屏障barrier)。
+
 - 解析结果直接存放在条目自身（`general_result`、`content`、`repetition`），无需额外的结果对象。`content` 由三种类型共用，含义见 [「`content` 里放的是什么」](#content-里放的是什么)。
 
 - 标志按名称记录、而不只是计数，因此 `-v` 与 `--verbose` 这类别名可以区分开。
@@ -45,10 +47,10 @@
 ```
 argparser/
 ├── include/argparser.hpp   公共头文件：声明 + Doxygen 注释
-├── argparser.cpp           实现
-├── main.cpp                手工测试用的临时驱动程序（不属于 API）
+├── src/argparser.cpp       实现
+├── src/main.cpp            手工测试用的临时驱动程序（不属于 API）
 ├── CMakeLists.txt
-└── CMakePresets.json       "linux-g++" 预设
+└── CMakePresets.json       "linux-gcc-debug" / "linux-gcc-release" 预设
 ```
 
 `main.cpp` 是一份测试用例，而不是示例：它只是随手用来手工验证解析器的小程序，
@@ -63,26 +65,32 @@ README 与头文件中的片段，而不是那个示例二进制。
 使用自带的 CMake 预设：
 
 ```
-cmake --preset linux-g++
-cmake --build out/build/linux-g++ --target app
-./out/build/linux-g++/app subA -i in.txt -o out.txt
+cmake --preset linux-gcc-release
+cmake --build build/linux-gcc-release --target app
+./build/linux-gcc-release/app -A 1 2 -B 3
 ```
+
+`linux-gcc-debug` 是对应的 Debug 预设。两个预设都构建到 `build/<预设名>`
+（见 `CMakePresets.json`）。
 
 使用普通 CMake：
 
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-./build/app subA -i in.txt -o out.txt
+cmake --build build --target app
+./build/app -A 1 2 -B 3
 ```
 
 不使用 CMake：
 
 ```
-g++ -std=c++17 -Iinclude main.cpp argparser.cpp -o app
+g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp -o app
 ```
 
-CMake 构建会生成共享库目标 `argparser` 和示例可执行文件 `app`。 `cmake --install` 只会安装库，头文件不会被安装；同时该目标没有导出自己的 include 目录。因此请在你自己项目中把 `include/` 加入头文件搜索路径，并自行 链接 `argparser.cpp`（或构建出的库）。
+CMake 构建会生成共享库目标 `argparser`，并且只有当本目录就是顶层项目时才会额外
+生成示例可执行文件 `app`；用 `add_subdirectory` 引入时则只提供库目标。
+`cmake --install` 会把库连同头文件一起安装，库目标也把 `include/` 作为公开
+头文件目录导出，因此使用者只需链接 `argparser` 并 `#include <argparser.hpp>`。
 
 ## 快速上手
 
@@ -162,14 +170,16 @@ if (app.entry("head").content[0] == "subA")
 }
 ```
 
-示例驱动 [main.cpp](./main.cpp) 就是这样分发的。它只是一份测试用例，能接受的
-命令行随时会变；目前的行为是：
+示例驱动 [main.cpp](./main.cpp) 只是一份测试用例，能接受的命令行随时会变。
+它目前并不按分组分发：只定义了两个选项 `-A/--arrA` 与 `-B/--arrB`，各接受
+1 到 5 个值，而且由于 `min_value_count` 为 `1`，两者都是必填的：
 
 ```
-./app subA -i in.txt -o out.txt   # 退出码 0
-./app subB -v                     # 退出码 0
-./app subB -v -v                  # 退出码 1（max_repetition 为 1）
-./app wrong                       # 退出码 2
+./app -A 1 2 -B 3               # 退出码 0
+./app --arrA=7 --arrB=8         # 退出码 0
+./app -A 1 2 3 4 5 6 -B 9       # 退出码 1（max_value_count 为 5）
+./app -A 1 2                    # 退出码 1（缺少 -B，报告
+                                #         option_too_few_values）
 ```
 
 ## 支持的写法一览
@@ -187,6 +197,51 @@ if (app.entry("head").content[0] == "subA")
 | `--` | 选项结束；其后的内容全部按位置参数处理 |
 | `-` | 位置参数值（单独的短横线不是选项） |
 
+
+## 屏障（barrier）
+
+位置参数条目可以用 `ap_defkey::barrier` 登记一个或多个屏障词元。取值即词元
+文本，按字面逐个比较位置参数；该键可以重复出现，以登记多个词元。条目一旦遇到
+屏障就停止收集。
+
+位置参数本来只受数量范围约束，屏障就是给它多加一条「到哪儿为止」的限制，
+免得它把后面所有参数都吞掉。
+
+屏障词元**不会**写进 `content`。它会和已收集的位置参数一起被消耗（除非
+`consume` 为 `false`），因此后续条目看不到它，而它之后的参数原封不动地留给
+后续条目：
+
+```
+ap_instance app({ap_entry("files", ap_type::positional,
+                          {{ap_defkey::barrier, "|"}}),
+                 ap_entry("rest", ap_type::positional, {})});
+app.pre_parse({"app", "a.txt", "b.txt", "|", "c.txt"});
+app.evaluate();
+// files.content == {"a.txt", "b.txt"}
+// rest.content  == {"c.txt"}
+```
+
+需要知道的细节：
+
+- 屏障是为位置参数准备的，`option` 与 `flag` 条目用不上它。
+
+- 只有条目还在收集时才会遇到屏障。一旦 `max_positional_count` 已满足，循环在
+  屏障之前就结束，屏障会留在参数池里，被 `fine(false)` 与 `errors()` 报告为
+  `invalid_arguments`。
+
+- 屏障可以出现在第一个位置：此时条目收集不到任何内容，若
+  `min_positional_count` 大于 `0` 则报告 `positional_too_few_args`；`consume`
+  为 `true` 时屏障照样被消耗。
+
+- 取值按字面处理：不像 `long_name` 与 `short_name`，它不会按 `,` 拆分。
+
+- 空值会被拒绝：`{ap_defkey::barrier, ""}` 会让构造函数抛出 `std::runtime_error`。
+
+- `--` 不能作为屏障，因为预处理阶段就把它删掉了。`--` 之后的每个参数都是
+  `simple`，因此屏障在那种位置可以看起来像选项，例如 `-x`。
+
+- 屏障之后剩下的参数只是「未被消耗」：默认 `fine()` 仍返回 `true`，而
+  `fine(false)` 与 `errors()` 会报告它们。
 
 ## `content` 里放的是什么
 
@@ -235,6 +290,7 @@ const ap_entry &verbose = app.entry("verbose");
 | `short_name` | 一个或多个单字符，用 `,` 分隔 |
 | `min_positional_count` | 整数 `>= 0`，默认 `0` |
 | `max_positional_count` | 非零整数；负数或不写表示不限，默认 `-1` |
+| `barrier` | 字面词元，位置参数遇到它即停止收集；可重复 |
 | `min_value_count` | 整数 `>= 0`，默认 `0` |
 | `max_value_count` | 非零整数；负数或不写表示不限，默认 `-1` |
 | `max_repetition` | 非零整数；负数或不写表示不限，默认 `-1` |
@@ -248,6 +304,7 @@ const ap_entry &verbose = app.entry("verbose");
 | `type`、`consume` | 行为控制 |
 | `positional_range`、`valcnt_range`、`max_repetition` | 校验限制 |
 | `long_names`、`short_names` | 可接受的名称 |
+| `barriers` | 让位置参数停止收集的词元（见[屏障](#屏障barrier)） |
 | `general_result` | `ap_result`，默认 `unparsed` |
 | `content` | 解析出的内容；具体含义取决于 `type`（见[上文](#content-里放的是什么)） |
 | `repetition` | 标志出现的次数 |

@@ -4,20 +4,10 @@ project(argparser VERSION 0.1.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
-# exe template begin
-add_executable(app src/main.cpp src/argparser.cpp)
-
-set_target_properties(app PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON)
-
-target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/include)
-# exe template end
-
-# lib template begin
+# lib: argparser
 add_library(argparser SHARED src/argparser.cpp)
 
-target_include_directories(argparser PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(argparser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 set_target_properties(argparser PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -30,6 +20,14 @@ install(TARGETS argparser
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-# lib template end
+
+# exe: app
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    add_executable(app src/main.cpp)
+    target_link_libraries(app PRIVATE argparser)
+    set_target_properties(app PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON)
+endif()

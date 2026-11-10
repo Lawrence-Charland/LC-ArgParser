@@ -128,6 +128,11 @@ ap_entry::ap_entry(
                     throw std::runtime_error(
                         "max_positional_count cannot be 0.");
                 break;
+            case argparser::ap_defkey::barrier:
+                if (it.second.empty())
+                    throw std::runtime_error("barrier cannot be empty");
+                barriers.insert(it.second);
+                break;
             case ap_defkey::min_value_count:
                 tmpint = std::stoi(it.second);
                 if (tmpint < 0)
@@ -376,8 +381,16 @@ void ap_instance::evaluate_entry(ap_entry &entry)
         for (auto it = args.begin();
              it != args.end() && counter < entry.positional_range.second; it++)
             if (it->second == ap_arg_style::simple)
-                entry.content.push_back(it->first), consumption.push_back(it),
-                    counter++;
+            {
+                if (entry.barriers.find(it->first) != entry.barriers.end())
+                {
+                    consumption.push_back(it);
+                    break;
+                }
+                else
+                    entry.content.push_back(it->first),
+                        consumption.push_back(it), counter++;
+            }
         if (counter < entry.positional_range.first) // Too few positionals
             entry.general_result = ap_result::positional_too_few_args;
         break;
