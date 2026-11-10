@@ -378,22 +378,37 @@ void ap_instance::evaluate_entry(ap_entry &entry)
             entry.general_result = ap_result::option_too_few_values;
         break;
     case ap_type::positional:
-        for (auto it = args.begin();
-             it != args.end() && counter < entry.positional_range.second; it++)
+    {
+        auto it = args.begin();
+        bool barrier_hit = false;
+        for (; it != args.end() && counter < entry.positional_range.second; it++)
             if (it->second == ap_arg_style::simple)
             {
                 if (entry.barriers.find(it->first) != entry.barriers.end())
                 {
                     consumption.push_back(it);
+                    barrier_hit = true;
                     break;
                 }
                 else
                     entry.content.push_back(it->first),
                         consumption.push_back(it), counter++;
             }
+        // The count limit may have stopped the collection before any barrier
+        // was met. Keep looking for the next barrier, and consume at most one
+        // per entry.
+        if (barrier_hit == false)
+            for (; it != args.end(); it++)
+                if (it->second == ap_arg_style::simple &&
+                    entry.barriers.find(it->first) != entry.barriers.end())
+                {
+                    consumption.push_back(it);
+                    break;
+                }
         if (counter < entry.positional_range.first) // Too few positionals
             entry.general_result = ap_result::positional_too_few_args;
         break;
+    }
     default:
         throw std::runtime_error("Invalid ap_type");
     }

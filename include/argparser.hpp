@@ -227,11 +227,10 @@ enum class ap_defkey
      * removes it before the entries are evaluated. Every argument after `--`
      * is marked as `argparser::ap_arg_style::simple`, so a barrier may look
      * like an option there, e.g. `-x`.
-     * @warning     The barrier is only reached while the entry is still
-     * collecting values: once `max_positional_count` is fulfilled, the
-     * collection stops before the barrier, which then stays available to the
-     * following entries (and is reported as
-     * `argparser::ap_result::invalid_arguments` if nobody consumes it).
+     * @warning     An entry consumes at most one barrier. When the count limit
+     * ends the collection before any barrier is met, the entry keeps looking
+     * through the remaining arguments and consumes the next barrier it finds;
+     * the arguments after that barrier are left untouched.
      */
     barrier,
     /**

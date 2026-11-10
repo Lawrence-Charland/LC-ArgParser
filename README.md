@@ -240,10 +240,13 @@ app.evaluate();
 Details worth knowing:
 
 - Barriers exist for positionals. `option` and `flag` entries do not use them.
-- The barrier is reached only while the entry is still collecting. Once
-  `max_positional_count` is fulfilled, the loop stops before the barrier, so the
-  barrier stays in the pool and is reported as `invalid_arguments` by
-  `fine(false)` and `errors()`.
+- An entry consumes at most one barrier. Collecting stops at the first one it
+  meets; when the count limit ends the collection before that, the entry keeps
+  scanning the remaining arguments and consumes the next barrier it finds,
+  leaving everything after it to the following entries.
+- Option values are collected greedily, so an argument right after a consumed
+  barrier can still end up as a value of an earlier option; order the entries
+  accordingly.
 - A barrier may be the first token: the entry then collects nothing and reports
   `positional_too_few_args` if `min_positional_count` is greater than `0`. The
   barrier is consumed anyway when `consume` is `true`.
