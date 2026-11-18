@@ -85,7 +85,7 @@ ap_entry::ap_entry(
             switch (it.first)
             {
             case ap_defkey::group:
-                group = it.second;
+                group.insert(it.second);
                 break;
             case ap_defkey::explanations:
                 explanations.push_back(it.second);
@@ -381,7 +381,9 @@ void ap_instance::evaluate_entry(ap_entry &entry)
     {
         auto it = args.begin();
         bool barrier_hit = false;
-        for (; it != args.end() && counter < entry.positional_range.second; it++)
+        for (; it != args.end() &&
+               counter < static_cast<unsigned>(entry.positional_range.second);
+             it++)
             if (it->second == ap_arg_style::simple)
             {
                 if (entry.barriers.find(it->first) != entry.barriers.end())
@@ -422,7 +424,8 @@ void ap_instance::evaluate_entry(ap_entry &entry)
 void ap_instance::evaluate(const std::string &group)
 {
     for (auto &it : entries)
-        if (name_mapper.find(it.name) != name_mapper.end() && it.group == group)
+        if (name_mapper.find(it.name) != name_mapper.end() &&
+            it.group.find(group) != it.group.end())
             evaluate_entry(it);
 }
 
@@ -468,7 +471,8 @@ bool ap_instance::fine(const std::string &group)
 {
     for (auto &it : entries)
         if (name_mapper.find(it.name) != name_mapper.end() &&
-            it.group == group && it.general_result != ap_result::success &&
+            it.group.find(group) != it.group.end() &&
+            it.general_result != ap_result::success &&
             it.general_result != ap_result::unparsed)
             return false;
     return true;

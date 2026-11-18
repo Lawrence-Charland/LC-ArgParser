@@ -23,7 +23,8 @@ int main(int argc, char **argv)
             "arrB",
             ap_type::option,
             {
-            {ap_defkey::explanations,"arrB (--arrB or -A)"},
+            {ap_defkey::explanations,"arrB (--arrB or -B)"},
+            {ap_defkey::group,"extra"},
             {ap_defkey::short_name,"B"},
             {ap_defkey::long_name,"arrB"},
             {ap_defkey::min_value_count,"1"},
@@ -33,7 +34,7 @@ int main(int argc, char **argv)
     });
     // clang-format on
     cmd.pre_parse(argc, argv);
-    cmd.evaluate();
+    cmd.evaluate("extra");
     if (!cmd.fine(false))
         return 1;
     return 0;

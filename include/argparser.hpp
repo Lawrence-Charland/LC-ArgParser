@@ -34,6 +34,8 @@
 namespace argparser
 {
 
+inline constexpr const char *default_group = "default";
+
 /**
  * @brief       Argument styles, used to mark each argument to different kinds
  * (which happens in preparsing).
@@ -352,7 +354,7 @@ struct ap_entry
      * @brief       The group the entry belongs to. Defaults to `default`.
      * @see         argparser::ap_instance::evaluate
      */
-    std::string group = "default";
+    std::unordered_set<std::string> group = {default_group};
     /**
      * @brief       The human-readable description of the entry, typically
      * printed in the usage message. Defaults to empty.
