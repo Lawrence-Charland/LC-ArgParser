@@ -26,7 +26,8 @@ English | [简体中文](./README.zh_CN.md)
 - Several long/short names per entry (`{"v,V"}` registers both).
 - Group-based dispatch for subcommands: `evaluate("subA")`, `fine("subA")`.
 - Validation: minimum/maximum positional count, minimum/maximum option value
-  count, maximum flag repetition.
+  count, maximum flag repetition, and one-value-per-occurrence options
+  (`no_variadic`).
 - Barriers for positionals: a positional entry stops collecting at a registered
   token such as `|` or `END`; see [Barriers](#barriers).
 - Results are stored on the entries themselves (`general_result`, `content`,
@@ -36,7 +37,8 @@ English | [简体中文](./README.zh_CN.md)
   `--verbose` stay distinguishable.
 - Replaceable error messages: `describe()` plus overridable `AP_DESCRIBE_*`
   macros.
-- Doxygen comments with usage snippets in the header.
+- Dedicated usage guides: [USAGE.md](./docs/USAGE.md) (English) and
+  [USAGE.zh_CN.md](./docs/USAGE.zh_CN.md) (简体中文).
 
 ## Requirements
 
@@ -48,7 +50,9 @@ English | [简体中文](./README.zh_CN.md)
 
 ```text
 argparser/
-├── include/argparser.hpp   public header: declarations + Doxygen comments
+├── include/argparser.hpp   public header: declarations
+├── docs/USAGE.md           usage guide (English)
+├── docs/USAGE.zh_CN.md     usage guide (简体中文)
 ├── src/argparser.cpp       implementation
 ├── src/main.cpp            scratch driver for manual testing (not part of the API)
 ├── CMakeLists.txt
@@ -58,7 +62,7 @@ argparser/
 `main.cpp` is a test case, not an example: a throwaway program used to exercise
 the parser by hand. It may be rewritten, extended or removed at any time, so do
 not build tooling or expectations on it. The snippets in this README and in the
-header are the documentation; the demo binary is not.
+usage guides are the documentation; the demo binary is not.
 
 ## Build and run
 
@@ -310,6 +314,7 @@ to the same entry, and `repetition` is always `content.size()`. Even
 | `min_positional_count`     | integer `>= 0`, default `0`                                  |
 | `max_positional_count`     | non-zero integer, negative or absent = unlimited, default `-1` |
 | `barrier`                  | literal token that ends the positional collection; repeatable |
+| `no_variadic`              | empty value; an option takes at most one value per occurrence |
 | `min_value_count`          | integer `>= 0`, default `0`                                  |
 | `max_value_count`          | non-zero integer, negative or absent = unlimited, default `-1` |
 | `max_repetition`           | non-zero integer, negative or absent = unlimited, default `-1` |
@@ -319,7 +324,7 @@ to the same entry, and `repetition` is always `content.size()`. Even
 | Member                             | Role                                    |
 | ---------------------------------- | --------------------------------------- |
 | `name`, `group`, `explanations`    | identity and help text                  |
-| `type`, `consume`                  | behaviour                               |
+| `type`, `consume`, `no_variadic`   | behaviour                               |
 | `positional_range`, `valcnt_range`, `max_repetition` | validation limits  |
 | `long_names`, `short_names`        | accepted names                          |
 | `barriers`                         | tokens that end the positional collection (see [Barriers](#barriers)) |
@@ -396,10 +401,11 @@ Available macros: `AP_DESCRIBE_POSITIONAL_TOO_FEW_ARGS`,
 
 ## Documentation
 
-The API reference lives in the Doxygen comments of
-[include/argparser.hpp](./include/argparser.hpp), including constructor
-snippets. To generate HTML, run Doxygen with `INPUT = include` and
-`EXTRACT_ALL = YES` (or point your own Doxyfile at the header).
+The detailed reference, covering every definition key, result and edge case,
+lives in [USAGE.md](./docs/USAGE.md) (English) and
+[USAGE.zh_CN.md](./docs/USAGE.zh_CN.md) (简体中文). The public API itself is
+declared
+in [include/argparser.hpp](./include/argparser.hpp).
 
 ## License
 

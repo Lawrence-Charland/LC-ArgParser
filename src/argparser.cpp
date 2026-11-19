@@ -133,6 +133,12 @@ ap_entry::ap_entry(
                     throw std::runtime_error("barrier cannot be empty");
                 barriers.insert(it.second);
                 break;
+            case argparser::ap_defkey::no_variadic:
+                if (it.second.empty() == false)
+                    throw std::runtime_error("no_variadic is not assignable. "
+                                             "Please leave the value empty.");
+                no_variadic = true;
+                break;
             case ap_defkey::min_value_count:
                 tmpint = std::stoi(it.second);
                 if (tmpint < 0)
@@ -368,6 +374,8 @@ void ap_instance::evaluate_entry(ap_entry &entry)
                         }
                         entry.content.push_back(it->token),
                             consumption.push_back(it), counter++;
+                        if (entry.no_variadic)
+                            break;
                     }
                 }
             }

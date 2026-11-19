@@ -24,7 +24,7 @@
 
 - 基于分组的子命令分发：`evaluate("subA")`、`fine("subA")`。
 
-- 校验能力：位置参数的最少/最多数量、选项值的最少/最多数量、标志的最大重复次数。
+- 校验能力：位置参数的最少/最多数量、选项值的最少/最多数量、标志的最大重复次数，以及选项每次出现最多取一个值（`no_variadic`）。
 
 - 位置参数屏障（barrier）：位置参数条目遇到登记的词元（如 `|`、`END`）就停止收集，见[「屏障」](#屏障barrier)。
 
@@ -34,7 +34,7 @@
 
 - 可替换的错误提示：`describe()` 以及可覆盖的 `AP_DESCRIBE_*` 宏。
 
-- 头文件中带有 Doxygen 注释与用法片段。
+- 专门的使用指南：[USAGE.md](./docs/USAGE.md)（英文）与 [USAGE.zh_CN.md](./docs/USAGE.zh_CN.md)（简体中文）。
 
 ## 环境要求
 
@@ -46,7 +46,9 @@
 
 ```
 argparser/
-├── include/argparser.hpp   公共头文件：声明 + Doxygen 注释
+├── include/argparser.hpp   公共头文件：声明
+├── docs/USAGE.md           使用指南（英文）
+├── docs/USAGE.zh_CN.md     使用指南（简体中文）
 ├── src/argparser.cpp       实现
 ├── src/main.cpp            手工测试用的临时驱动程序（不属于 API）
 ├── CMakeLists.txt
@@ -55,7 +57,7 @@ argparser/
 
 `main.cpp` 是一份测试用例，而不是示例：它只是随手用来手工验证解析器的小程序，
 随时可能被改写、扩充甚至删除，请不要在它之上搭建工具或期望。真正的文档是本
-README 与头文件中的片段，而不是那个示例二进制。
+README 与使用指南，而不是那个示例二进制。
 
 ## 构建与运行
 
@@ -294,6 +296,7 @@ const ap_entry &verbose = app.entry("verbose");
 | `min_positional_count` | 整数 `>= 0`，默认 `0` |
 | `max_positional_count` | 非零整数；负数或不写表示不限，默认 `-1` |
 | `barrier` | 字面词元，位置参数遇到它即停止收集；可重复 |
+| `no_variadic` | 值留空；选项每次出现最多取一个值 |
 | `min_value_count` | 整数 `>= 0`，默认 `0` |
 | `max_value_count` | 非零整数；负数或不写表示不限，默认 `-1` |
 | `max_repetition` | 非零整数；负数或不写表示不限，默认 `-1` |
@@ -304,7 +307,7 @@ const ap_entry &verbose = app.entry("verbose");
 | 成员 | 作用 |
 | - | - |
 | `name`、`group`、`explanations` | 身份信息与帮助文本 |
-| `type`、`consume` | 行为控制 |
+| `type`、`consume`、`no_variadic` | 行为控制 |
 | `positional_range`、`valcnt_range`、`max_repetition` | 校验限制 |
 | `long_names`、`short_names` | 可接受的名称 |
 | `barriers` | 让位置参数停止收集的词元（见[屏障](#屏障barrier)） |
@@ -369,7 +372,7 @@ const ap_entry &verbose = app.entry("verbose");
 
 ## 文档
 
-更详尽的 API 参考写在 [include/argparser.hpp](./include/argparser.hpp) 的 Doxygen 注释中，其中包含构造函数的使用片段。若要生成 HTML，请运行 Doxygen 并把 `INPUT` 设为 `include`、`EXTRACT_ALL` 设为 `YES`（或用你自己的 Doxyfile 指向该头文件）。
+包含每个定义键、结果与边界情况的详细说明见 [USAGE.md](./docs/USAGE.md)（英文）与 [USAGE.zh_CN.md](./docs/USAGE.zh_CN.md)（简体中文）。公共 API 本身声明在 [include/argparser.hpp](./include/argparser.hpp)。
 
 ## 许可证
 
