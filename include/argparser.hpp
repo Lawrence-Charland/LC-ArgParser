@@ -485,6 +485,50 @@ struct ap_entry
 };
 
 /**
+ * @brief       A preparsed command line token.
+ * @note        The style is recorded together with the token, so that the
+ * evaluator does not need to derive it again.
+ * @see         argparser::ap_arg_style
+ * @see         argparser::ap_instance::pre_parse
+ */
+struct ap_arg_token
+{
+    /**
+     * @brief       The original command line word this token was derived from,
+     * with its leading dashes and any attached value kept as typed.
+     * @note        Tokens split out of a bundled short option share the whole
+     * bundle as their pretty name.
+     * @see         argparser::ap_instance::errors
+     */
+    std::string pretty_name;
+    /**
+     * @brief       The token text. For a short or long option, an attached
+     * value follows the name after `=`.
+     */
+    std::string token;
+    /**
+     * @brief       The style of the token.
+     */
+    ap_arg_style style;
+
+    /**
+     * @brief       Constructs an empty token.
+     */
+    ap_arg_token() = default;
+    /**
+     * @brief       Constructs a token from its pretty name, text and style.
+     * @param       _pretty_name    The original command line word.
+     * @param       _token          The normalized token text.
+     * @param       _style          The style of the token.
+     */
+    ap_arg_token(const std::string &_pretty_name, std::string _token,
+                 ap_arg_style _style)
+        : pretty_name(_pretty_name), token(std::move(_token)), style(_style)
+    {
+    }
+};
+
+/**
  * @brief       Instance, to organize the entries and the cmdline arguments
  * together, and to provide some parsing methods and entry management methods.
  * @note        The sequence of the entries is the order of the evaluation.
@@ -499,7 +543,7 @@ class ap_instance
      * calling the preparser.
      * @see         argparser::ap_instance::pre_parse
      */
-    std::list<std::pair<std::string, ap_arg_style>> args;
+    std::list<ap_arg_token> args;
     /**
      * @brief       The entries.
      * @warning     No two entries may share a name.
@@ -711,7 +755,8 @@ class ap_instance
      * @brief       Lists the errors of the last evaluation.
      * @return      The name of each failed entry paired with its result, plus
      * one `argparser::ap_result::invalid_arguments` entry keyed by the first
-     * unconsumed argument, if there is any.
+     * unconsumed argument in its original spelling (see
+     * `argparser::ap_arg_token::pretty_name`), if there is any.
      * @note        Only failed entries are listed; use `fine` for a plain
      * success check.
      * @note        Deactivated entries are not listed, even if they kept a

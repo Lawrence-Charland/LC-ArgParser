@@ -252,7 +252,7 @@ void ap_instance::pre_parse(const std::vector<std::string> &argv)
 
     // Parse the cmdline
     args.clear();
-    args.emplace_back(argv[0], ap_arg_style::argv_zero);
+    args.emplace_back(argv[0], argv[0], ap_arg_style::argv_zero);
     std::string tmp;
     std::pair<std::string, std::string> tmppair;
     for (std::size_t i = 1; i < argv.size(); i++)
@@ -260,51 +260,51 @@ void ap_instance::pre_parse(const std::vector<std::string> &argv)
         tmp = argv[i];
         if (tmp == "--") // Separator
             for (i++; i < argv.size(); i++)
-                args.emplace_back(argv[i], ap_arg_style::simple);
+                args.emplace_back(argv[i], argv[i], ap_arg_style::simple);
         else if (tmp.find("--") == 0) // Double-dash
         {
             tmppair = equation(tmp.substr(2));
             if (long_options.find(tmppair.first) != long_options.end())
                 // Preparse if it's a long option
-                args.emplace_back(tmp.substr(2), ap_arg_style::double_dash);
+                args.emplace_back(tmp, tmp.substr(2),
+                                  ap_arg_style::double_dash);
             else // Keep still otherwise
-                args.emplace_back(tmp, ap_arg_style::simple);
+                args.emplace_back(tmp, tmp, ap_arg_style::simple);
         }
         else if (tmp[0] == '-' && tmp.length() >= 2)
         {
             if (short_options.find(tmp[1]) == short_options.end())
                 // Keep still if it's not a short option
-                args.emplace_back(tmp, ap_arg_style::simple);
+                args.emplace_back(tmp, tmp, ap_arg_style::simple);
             else
             {
                 for (std::size_t i = 1; i < tmp.length(); i++)
                     if (short_options.find(tmp[i]) !=
                         short_options.end()) // Merged
                     {
-                        args.emplace_back(std::string{tmp[i]},
+                        args.emplace_back(tmp, std::string{tmp[i]},
                                           ap_arg_style::single_dash);
                         if (short_options.at(tmp[i]) == true)
                         {
-                            args.back().first += "=" + tmp.substr(i + 1);
+                            args.back().token += "=" + tmp.substr(i + 1);
                             break;
                         }
                     }
                     else // Sticky value
                     {
-                        args.back().first += "=" + tmp.substr(i);
+                        args.back().token += "=" + tmp.substr(i);
                         break;
                     }
             }
         }
         else // Simple
-            args.emplace_back(tmp, ap_arg_style::simple);
+            args.emplace_back(tmp, tmp, ap_arg_style::simple);
     }
 }
 
 void ap_instance::evaluate_entry(ap_entry &entry)
 {
-    std::vector<std::list<std::pair<std::string, ap_arg_style>>::iterator>
-        consumption;
+    std::vector<std::list<ap_arg_token>::iterator> consumption;
     std::pair<std::string, std::string> tmppair;
     unsigned counter = 0;
     switch (entry.type)
@@ -312,15 +312,15 @@ void ap_instance::evaluate_entry(ap_entry &entry)
     case ap_type::flag:
         for (auto it = args.begin(); it != args.end(); it++)
         {
-            if (it->second != ap_arg_style::single_dash &&
-                it->second != ap_arg_style::double_dash)
+            if (it->style != ap_arg_style::single_dash &&
+                it->style != ap_arg_style::double_dash)
                 // Must be -xxxx or --xxx
                 continue;
-            tmppair = equation(it->first);
-            if ((it->second == ap_arg_style::single_dash &&
+            tmppair = equation(it->token);
+            if ((it->style == ap_arg_style::single_dash &&
                  entry.short_names.find(tmppair.first[0]) !=
                      entry.short_names.end()) ||
-                (it->second == ap_arg_style::double_dash &&
+                (it->style == ap_arg_style::double_dash &&
                  entry.long_names.find(tmppair.first) !=
                      entry.long_names.end()))
             {
@@ -337,15 +337,15 @@ void ap_instance::evaluate_entry(ap_entry &entry)
     case ap_type::option:
         for (auto it = args.begin(); it != args.end(); it++)
         {
-            if (it->second != ap_arg_style::single_dash &&
-                it->second != ap_arg_style::double_dash)
+            if (it->style != ap_arg_style::single_dash &&
+                it->style != ap_arg_style::double_dash)
                 // Must be -xxx or --xxx
                 continue;
-            tmppair = equation(it->first);
-            if ((it->second == ap_arg_style::single_dash &&
+            tmppair = equation(it->token);
+            if ((it->style == ap_arg_style::single_dash &&
                  entry.short_names.find(tmppair.first[0]) !=
                      entry.short_names.end()) ||
-                (it->second == ap_arg_style::double_dash &&
+                (it->style == ap_arg_style::double_dash &&
                  entry.long_names.find(tmppair.first) !=
                      entry.long_names.end()))
             {
@@ -360,13 +360,13 @@ void ap_instance::evaluate_entry(ap_entry &entry)
                 {
                     for (it++; it != args.end(); it++)
                     {
-                        if (it->second != ap_arg_style::simple ||
+                        if (it->style != ap_arg_style::simple ||
                             counter == entry.valcnt_range.second)
                         { // Boundary
                             it--;
                             break;
                         }
-                        entry.content.push_back(it->first),
+                        entry.content.push_back(it->token),
                             consumption.push_back(it), counter++;
                     }
                 }
@@ -384,16 +384,16 @@ void ap_instance::evaluate_entry(ap_entry &entry)
         for (; it != args.end() &&
                counter < static_cast<unsigned>(entry.positional_range.second);
              it++)
-            if (it->second == ap_arg_style::simple)
+            if (it->style == ap_arg_style::simple)
             {
-                if (entry.barriers.find(it->first) != entry.barriers.end())
+                if (entry.barriers.find(it->token) != entry.barriers.end())
                 {
                     consumption.push_back(it);
                     barrier_hit = true;
                     break;
                 }
                 else
-                    entry.content.push_back(it->first),
+                    entry.content.push_back(it->token),
                         consumption.push_back(it), counter++;
             }
         // The count limit may have stopped the collection before any barrier
@@ -401,8 +401,8 @@ void ap_instance::evaluate_entry(ap_entry &entry)
         // per entry.
         if (barrier_hit == false)
             for (; it != args.end(); it++)
-                if (it->second == ap_arg_style::simple &&
-                    entry.barriers.find(it->first) != entry.barriers.end())
+                if (it->style == ap_arg_style::simple &&
+                    entry.barriers.find(it->token) != entry.barriers.end())
                 {
                     consumption.push_back(it);
                     break;
@@ -487,7 +487,7 @@ std::vector<std::pair<std::string, ap_result>> ap_instance::errors()
             it.general_result != ap_result::unparsed)
             result.emplace_back(it.name, it.general_result);
     if (args.size() > 1) // Redundant arguments
-        result.emplace_back((++args.begin())->first,
+        result.emplace_back((++args.begin())->pretty_name,
                             ap_result::invalid_arguments);
     return result;
 }
@@ -509,7 +509,7 @@ std::size_t ap_instance::get_index(const std::string &name)
 
 const std::string_view ap_instance::argv_zero()
 {
-    return args.begin()->first;
+    return args.begin()->token;
 }
 
 /**
