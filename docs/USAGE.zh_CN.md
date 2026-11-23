@@ -20,6 +20,7 @@
   - [4.2 定义键没有类型校验](#42-定义键没有类型校验)
 - [5. 预处理](#5-预处理)
   - [5.1 词元样式](#51-词元样式)
+  - [5.2 重新审视词元](#52-重新审视词元)
 - [6. 求值](#6-求值)
   - [6.1 顺序、分组与消耗](#61-顺序分组与消耗)
   - [6.2 选项](#62-选项)
@@ -225,8 +226,8 @@ void pre_parse(const std::vector<std::string> &argv);
 - vector 不能为空，`argc` 必须至少为 `1`。
 - 每次调用都会替换上一次的词元池，并根据有效条目重建名称登记表。
 - 新增、更新或删除条目时不会立即重建名称登记表；预处理器要到下一次
-  `pre_parse` 才会识别新名称。被删除的条目会立即停止参与求值，因为它的名称已从
-  查找表中移除。
+  `pre_parse` 或调用 [`reparse()`](#52-重新审视词元) 之后才会识别新名称。被删除的
+  条目会立即停止参与求值，因为它的名称已从查找表中移除。
 - 词元池本身（`ap_arg_token`：原始拼写、词元文本、样式）属于内部细节，
   `ap_instance` 不对外暴露。
 
@@ -269,6 +270,37 @@ void pre_parse(const std::vector<std::string> &argv);
 - `--` 会被移除。它并不能阻止选项把下一个 `simple` 词元当作值：若 `-o` 是取值
   选项，`-o -- a` 会得到 `content == {"a"}`。该词元最终归谁，取决于条目顺序。
 - 单独的 `-` 是 `simple`，可以作为位置参数或选项值。
+
+### 5.2 重新审视词元
+
+```cpp
+void reparse();
+```
+
+`reparse()` 根据当前有效条目重建名称登记表，并且只重新审视 `simple` 词元。上一次
+`pre_parse` 时因名称未登记而保持 `simple` 的词仍留在词元池里，此时会按新名称重新
+分词，因此新增或改名的选项无需重新拆分整条命令行即可被识别，已经理解的词元也不会
+丢失。已标记为 `single_dash` / `double_dash` 的词元与 `argv[0]` 不受影响，词元池
+顺序保持不变。
+
+典型用法是动态条目表：先解析一次，改动条目，求值前再调用 `reparse()`。
+
+```cpp
+ap_instance app({ap_entry("input", ap_type::positional, {})});
+app.pre_parse({"app", "--verbose", "a.txt"}); // --verbose 保持 simple
+app.add_entry(ap_entry("verbose", ap_type::flag,
+                       {{ap_defkey::long_name, "verbose"}}));
+app.reparse(); // --verbose 变成 double_dash 词元
+app.evaluate();
+```
+
+- `reparse()` 不会重置结果，不会改动 `argv[0]`，而且是幂等的：仍匹配不到任何名称的
+  `simple` 词保持原样。
+- 词元池不记录 `--` 分隔符被丢弃的位置，所以 `--` 之后按字面量处理的词同样是
+  `simple`，也会被重新审视，可能变成选项。如果某段必须保持字面量，请用同样的参数
+  再调用一次 `pre_parse`，而不是 `reparse()`。
+- 看起来像选项的选项值也是 `simple` 词元，遵循同样的规则；请在 `evaluate()` 之前、
+  值尚未绑定时调用 `reparse()`。
 
 ## 6. 求值
 
@@ -497,7 +529,8 @@ std::size_t get_index(const std::string &name);
 - `update_entry` 按名称替换条目，连结果一起替换。名称未激活时抛异常。
 - `entry(name)` 和 `get_index(name)` 在名称未激活时抛 `std::out_of_range`。
 - `entry(index)` 没有边界检查；索引越界属于未定义行为。
-- 新增、更新、删除的名称要到下一次 `pre_parse` 才会被预处理器识别。
+- 新增、更新、删除的名称要到下一次 `pre_parse`，或调用
+  [`reparse()`](#52-重新审视词元) 之后，才会被预处理器识别。
 - `ap_instance(entries)` 构造函数等价于按顺序逐个添加条目；名称冲突时抛异常。
 - `evaluate_entry(entry)` 直接对当前词元池求值单个条目，填充该条目的结果，并在
   `consume` 为 `true` 时消耗其匹配到的词元。大多数程序只需要 `evaluate()` /
@@ -542,6 +575,8 @@ app.delete_entry(app.get_index("color")); // 停用，保留存储
   `fine()` 仍然返回 `true`。
 - **`--` 只改变样式。** 若选项条目先于位置参数求值，它仍可把 `--` 之后的词元
   当作值（`-o -- a` → `"a"`）。
+- **`reparse()` 会重新审视每个 `simple` 词元**，包括 `--` 之后按字面量处理的词，以及
+  看起来像选项的选项值；详见[重新审视词元](#52-重新审视词元)。它不会重置结果。
 - **短选项合并写法有几个陷阱。** `-ofile.txt` 是紧贴值；但 `v` 为标志、`X` 未登记时
   `-vX` 会变成带意外值的标志；`x` 未登记时 `-xv` 是一个 `simple` 词元。
 - **`min_value_count > 0` 表示选项必填。** 即使选项未出现也会执行检查。

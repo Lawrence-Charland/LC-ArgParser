@@ -22,6 +22,7 @@ behaves.
   - [4.2 Keys are not type-checked](#42-keys-are-not-type-checked)
 - [5. Pre-parsing](#5-pre-parsing)
   - [5.1 Token styles](#51-token-styles)
+  - [5.2 Re-parsing](#52-re-parsing)
 - [6. Evaluation](#6-evaluation)
   - [6.1 Order, groups and consumption](#61-order-groups-and-consumption)
   - [6.2 Options](#62-options)
@@ -240,9 +241,9 @@ recorded as the program name (`ap_arg_style::argv_zero`).
 - Each call replaces the previous token pool and rebuilds the name registries
   from the active entries.
 - Adding, updating or deleting an entry does not rebuild the name registries;
-  the preparser recognizes the new names only from the next `pre_parse` on. A
-  deleted entry stops being evaluated immediately, because its name is removed
-  from the lookup table.
+  the preparser recognizes the new names only from the next `pre_parse` on, or
+  after [`reparse()`](#52-re-parsing). A deleted entry stops being evaluated
+  immediately, because its name is removed from the lookup table.
 - The token pool itself (`ap_arg_token`: pretty name, token text, style) is an
   internal detail; `ap_instance` does not expose it.
 
@@ -290,6 +291,42 @@ Pre-parsing rules worth knowing:
   `content == {"a"}`. Entry order decides whether a positional can claim such a
   token first.
 - A lone `-` is `simple`, so it can be a positional or an option value.
+
+### 5.2 Re-parsing
+
+```cpp
+void reparse();
+```
+
+`reparse()` rebuilds the name registries from the active entries and re-examines
+only the `simple` tokens. A word that stayed `simple` at the last `pre_parse`
+because its name was not registered stays in the pool, and is tokenized again
+now, so added or renamed options are recognized without discarding anything the
+preparser already understood. Tokens already classified as `single_dash` /
+`double_dash`, and `argv[0]`, are left untouched, and the order of the pool is
+preserved.
+
+Typical use is a dynamic entry table: parse once, change the entries, then
+`reparse()` before evaluating.
+
+```cpp
+ap_instance app({ap_entry("input", ap_type::positional, {})});
+app.pre_parse({"app", "--verbose", "a.txt"}); // --verbose stays simple
+app.add_entry(ap_entry("verbose", ap_type::flag,
+                       {{ap_defkey::long_name, "verbose"}}));
+app.reparse(); // --verbose becomes a double_dash token
+app.evaluate();
+```
+
+- `reparse()` does not reset results, does not touch `argv[0]`, and is
+  idempotent: a `simple` word that still matches no name stays as it is.
+- The pool does not remember where a `--` separator was dropped, so a word taken
+  literally after `--` is `simple` and is re-examined as well; it can turn into
+  an option. If a literal region must stay literal, run `pre_parse` again with
+  the same arguments instead of calling `reparse()`.
+- Option values that look like option words are `simple` tokens too and follow
+  the same rule. Call `reparse()` before `evaluate()`, while no value is bound
+  yet.
 
 ## 6. Evaluation
 
@@ -548,7 +585,7 @@ std::size_t get_index(const std::string &name);
 - `entry(index)` performs no bounds check; an out-of-range index is undefined
   behaviour.
 - Added, updated and deleted names are recognized by the preparser only from
-  the next `pre_parse`.
+  the next `pre_parse` on, or after [`reparse()`](#52-re-parsing).
 - The `ap_instance(entries)` constructor is equivalent to adding every entry in
   order; it throws when two names collide.
 - `evaluate_entry(entry)` evaluates one entry directly against the current pool.
@@ -597,6 +634,9 @@ that are not already defined.
   `fine()`.
 - **`--` only changes styles.** An option evaluated before a positional can
   still take a post-`--` token as its value (`-o -- a` → `"a"`).
+- **`reparse()` revisits every `simple` token**, including words taken literally
+  after `--` and option values that look like options; see
+  [Re-parsing](#52-re-parsing). It never resets results.
 - **Short bundles have sharp edges.** `-ofile.txt` is an attached value, but
   `-vX` with `X` unregistered becomes a flag occurrence with an unexpected
   value, and `-xv` with unknown `x` is a single `simple` token.

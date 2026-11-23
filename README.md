@@ -180,6 +180,17 @@ input: Not enough positional arguments
    `consume` is `false`.
 3. `fine()` and `errors()` report the outcome.
 
+Entries may change between `pre_parse` and `evaluate`. `reparse()` rebuilds the
+name registries and re-examines only the tokens that stayed `simple`, so a newly
+added or renamed option is recognized while arguments that are already
+classified are kept:
+
+```cpp
+app.add_entry(ap_entry("verbose", ap_type::flag,
+                       {{ap_defkey::long_name, "verbose"}}));
+app.reparse(); // "--verbose" becomes an option token
+```
+
 ## Subcommands via groups
 
 Every entry has a `group` (default: `"default"`). Evaluate only the group that
@@ -352,6 +363,7 @@ to the same entry, and `repetition` is always `content.size()`. Even
 | `update_entry(entry)`                         | replace an entry, matched by name                |
 | `evaluate_entry(entry)`                       | evaluate one entry directly                      |
 | `pre_parse(argc, argv)` / `pre_parse(tokens)` | split and mark the arguments                     |
+| `reparse()`                                   | re-examine `simple` tokens against the entries   |
 | `evaluate(group)` / `evaluate()`              | evaluate one group / all active entries          |
 | `reset_results()`                             | clear `content`, `repetition`, `general_result`  |
 | `fine(ignore_redundant = true)` / `fine(group)` | success check                                  |
@@ -401,6 +413,9 @@ Available macros: `AP_DESCRIBE_POSITIONAL_TOO_FEW_ARGS`,
   absent, the entry reports `option_too_few_values`.
 - **Call `pre_parse` before `evaluate`.** `argv_zero()` before the first
   `pre_parse` is undefined behaviour.
+- **`reparse()` revisits every `simple` token**, including words taken literally
+  after `--` and option values that look like options. It keeps results and
+  `argv[0]` untouched.
 - **`evaluate` does not clear previous results.** `content` and `repetition`
   accumulate; call `reset_results()` and `pre_parse` again to start over.
 - **`entry(index)` performs no bounds check** — an out-of-range index is

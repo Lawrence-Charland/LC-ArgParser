@@ -165,6 +165,16 @@ input: Not enough positional arguments
 
 3. `fine()` 与 `errors()` 报告最终结果。
 
+条目可以在 `pre_parse` 与 `evaluate` 之间变化。`reparse()` 重建名称登记表，并且只
+重新审视仍为 `simple` 的词元，因此新增或改名的选项会被识别，而已经分类的参数不会
+被重新拆分：
+
+```
+app.add_entry(ap_entry("verbose", ap_type::flag,
+                       {{ap_defkey::long_name, "verbose"}}));
+app.reparse(); // "--verbose" 变成选项词元
+```
+
 ## 用分组实现子命令
 
 每个条目都有一个 `group`（默认 `"default"`）。只对当前子命令所属的分组 求值即可：
@@ -336,6 +346,7 @@ const ap_entry &verbose = app.entry("verbose");
 | `update_entry(entry)` | 按名称替换已有条目 |
 | `evaluate_entry(entry)` | 直接对单个条目求值 |
 | `pre_parse(argc, argv)` / `pre_parse(tokens)` | 拆分并标记参数 |
+| `reparse()` | 按当前条目重新审视 `simple` 词元 |
 | `evaluate(group)` / `evaluate()` | 对某个分组 / 全部有效条目求值 |
 | `reset_results()` | 清空 `content`、`repetition`、`general_result` |
 | `fine(ignore_redundant = true)` / `fine(group)` | 判断是否成功 |
@@ -372,7 +383,9 @@ const ap_entry &verbose = app.entry("verbose");
 
 - **`min_value_count >= 1` 会让选项变成必填项：** 若命令行中没有该选项， 条目会报告 `option_too_few_values`。
 
-- **先调用 `pre_parse`，再调用任何形式的 `evaluate` 方法。如果某次求值之后添加 、修改了任何条目，再次求值之前也必须调用 `pre_parse` 。** 首次 `pre_parse` 之前调用 `argv_zero()` 属于未定义行为。
+- **先调用 `pre_parse`，再调用任何形式的 `evaluate` 方法。如果某次求值之后添加 、修改了任何条目，再次求值之前也必须调用 `pre_parse` 或 `reparse()`。** 首次 `pre_parse` 之前调用 `argv_zero()` 属于未定义行为。
+
+- **`reparse()` 会重新审视每个 `simple` 词元**，包括 `--` 之后按字面量处理的词，以及看起来像选项的选项值。它不会改动已有结果与 `argv[0]`。
 
 - **`evaluate` 不会清空上一次的结果。** `content` 与 `repetition` 会累加； 想重新开始请调用 `reset_results()` 并重新 `pre_parse`。
 

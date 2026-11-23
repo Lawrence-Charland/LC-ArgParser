@@ -182,27 +182,31 @@ class ap_instance
   private:
     std::list<ap_arg_token> args;
     std::vector<ap_entry> entries;
-    // std::unordered_set<char> short_options;
     std::unordered_map<char, bool> short_options;
     std::unordered_set<std::string> long_options;
     std::unordered_map<std::string, std::size_t> name_mapper;
+    std::vector<ap_arg_token> tokenize(const std::string &word) const;
+    void build_registries();
 
   public:
     ap_instance(const std::vector<ap_entry> &_entries);
     void add_entry(const ap_entry &entry, std::size_t index = SIZE_MAX);
     void delete_entry(std::size_t index, bool clear_storage = false);
     void update_entry(const ap_entry &entry);
-    void evaluate_entry(ap_entry &entry);
     void pre_parse(int argc, char **argv);
     void pre_parse(const std::vector<std::string> &argv);
+    void reparse();
     void evaluate(const std::string &group);
     void evaluate();
+    void evaluate_entry(ap_entry &entry);
     void reset_results();
     bool fine(bool ignore_redundant = true);
     bool fine(const std::string &group);
     std::vector<std::pair<std::string, ap_result>> errors();
     const ap_entry &entry(const std::string &name);
     const ap_entry &entry(std::size_t index);
+    ap_entry &entry_mutable(const std::string &name);
+    ap_entry &entry_mutable(std::size_t index);
     std::size_t get_index(const std::string &name);
     const std::string_view argv_zero();
 };

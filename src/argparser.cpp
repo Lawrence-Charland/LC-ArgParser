@@ -11,6 +11,8 @@
 #include <stdexcept>
 
 #include <argparser.hpp>
+#include <string>
+#include <vector>
 
 namespace argparser
 {
@@ -230,8 +232,27 @@ void ap_instance::pre_parse(int argc, char **argv)
 
 void ap_instance::pre_parse(const std::vector<std::string> &argv)
 {
-    // Derive the registries from the entries, so that the entries stay the
-    // single source of truth for the names.
+    build_registries();
+
+    // Parse the cmdline
+    args.clear();
+    args.emplace_back(argv[0], argv[0], ap_arg_style::argv_zero);
+    for (std::size_t i = 1; i < argv.size(); i++)
+    {
+        if (argv[i] == "--") // Separator
+        {
+            // Everything past the separator is taken literally.
+            for (i++; i < argv.size(); i++)
+                args.emplace_back(argv[i], argv[i], ap_arg_style::simple);
+            break;
+        }
+        for (auto &it : tokenize(argv[i]))
+            args.push_back(std::move(it));
+    }
+}
+
+void ap_instance::build_registries()
+{
     short_options.clear();
     long_options.clear();
     for (std::size_t i = 0; i < entries.size(); i++)
@@ -255,56 +276,65 @@ void ap_instance::pre_parse(const std::vector<std::string> &argv)
         long_options.insert(entries[i].long_names.begin(),
                             entries[i].long_names.end());
     }
+}
 
-    // Parse the cmdline
-    args.clear();
-    args.emplace_back(argv[0], argv[0], ap_arg_style::argv_zero);
-    std::string tmp;
-    std::pair<std::string, std::string> tmppair;
-    for (std::size_t i = 1; i < argv.size(); i++)
+std::vector<ap_arg_token> ap_instance::tokenize(const std::string &word) const
+{
+    std::vector<ap_arg_token> tokens;
+    if (word.find("--") == 0) // Double-dash
     {
-        tmp = argv[i];
-        if (tmp == "--") // Separator
-            for (i++; i < argv.size(); i++)
-                args.emplace_back(argv[i], argv[i], ap_arg_style::simple);
-        else if (tmp.find("--") == 0) // Double-dash
-        {
-            tmppair = equation(tmp.substr(2));
-            if (long_options.find(tmppair.first) != long_options.end())
-                // Preparse if it's a long option
-                args.emplace_back(tmp, tmp.substr(2),
-                                  ap_arg_style::double_dash);
-            else // Keep still otherwise
-                args.emplace_back(tmp, tmp, ap_arg_style::simple);
-        }
-        else if (tmp[0] == '-' && tmp.length() >= 2)
-        {
-            if (short_options.find(tmp[1]) == short_options.end())
-                // Keep still if it's not a short option
-                args.emplace_back(tmp, tmp, ap_arg_style::simple);
-            else
-            {
-                for (std::size_t i = 1; i < tmp.length(); i++)
-                    if (short_options.find(tmp[i]) !=
-                        short_options.end()) // Merged
+        if (long_options.find(equation(word.substr(2)).first) !=
+            long_options.end())
+            // Preparse if it's a long option
+            tokens.emplace_back(word, word.substr(2),
+                                ap_arg_style::double_dash);
+        else // Keep still otherwise
+            tokens.emplace_back(word, word, ap_arg_style::simple);
+    }
+    else if (word[0] == '-' && word.length() >= 2)
+    {
+        if (short_options.find(word[1]) == short_options.end())
+            // Keep still if it's not a short option
+            tokens.emplace_back(word, word, ap_arg_style::simple);
+        else
+            for (std::size_t i = 1; i < word.length(); i++)
+                if (short_options.find(word[i]) !=
+                    short_options.end()) // Merged
+                {
+                    tokens.emplace_back(word, std::string{word[i]},
+                                        ap_arg_style::single_dash);
+                    if (short_options.at(word[i]) == true)
                     {
-                        args.emplace_back(tmp, std::string{tmp[i]},
-                                          ap_arg_style::single_dash);
-                        if (short_options.at(tmp[i]) == true)
-                        {
-                            args.back().token += "=" + tmp.substr(i + 1);
-                            break;
-                        }
-                    }
-                    else // Sticky value
-                    {
-                        args.back().token += "=" + tmp.substr(i);
+                        tokens.back().token += "=" + word.substr(i + 1);
                         break;
                     }
-            }
+                }
+                else // Sticky value
+                {
+                    tokens.back().token += "=" + word.substr(i);
+                    break;
+                }
+    }
+    else // Simple
+        tokens.emplace_back(word, word, ap_arg_style::simple);
+    return tokens;
+}
+
+void ap_instance::reparse()
+{
+    build_registries();
+    for (auto token = args.begin(); token != args.end();)
+    {
+        if (token->style == ap_arg_style::simple)
+        {
+            auto retokenize = tokenize(token->token);
+            token = args.erase(token);
+            token = args.insert(token, retokenize.begin(), retokenize.end());
+            for (auto &it : retokenize)
+                token++;
         }
-        else // Simple
-            args.emplace_back(tmp, tmp, ap_arg_style::simple);
+        else
+            token++;
     }
 }
 
@@ -506,6 +536,16 @@ const ap_entry &ap_instance::entry(const std::string &name)
 }
 
 const ap_entry &ap_instance::entry(std::size_t index)
+{
+    return entries[index];
+}
+
+ap_entry &ap_instance::entry_mutable(const std::string &name)
+{
+    return entries[name_mapper.at(name)];
+}
+
+ap_entry &ap_instance::entry_mutable(std::size_t index)
 {
     return entries[index];
 }
