@@ -37,6 +37,9 @@ English | [简体中文](./README.zh_CN.md)
   `--verbose` stay distinguishable.
 - Replaceable error messages: `describe()` plus overridable `AP_DESCRIBE_*`
   macros.
+- Script language: `<ap_script.hpp>` builds the entries from a compact text
+  script via `parse_script(text)`; keys are the `ap_defkey` names themselves.
+  See [USAGE §13](./docs/USAGE.md#13-script-language).
 - Dedicated usage guides: [USAGE.md](./docs/USAGE.md) (English) and
   [USAGE.zh_CN.md](./docs/USAGE.zh_CN.md) (简体中文).
 
@@ -51,10 +54,13 @@ English | [简体中文](./README.zh_CN.md)
 ```text
 argparser/
 ├── include/argparser.hpp   public header: declarations
+├── include/ap_script.hpp   script language: parse_script()
 ├── docs/USAGE.md           usage guide (English)
 ├── docs/USAGE.zh_CN.md     usage guide (简体中文)
 ├── src/argparser.cpp       implementation
+├── src/ap_script.cpp       script language implementation
 ├── src/main.cpp            scratch driver for manual testing (not part of the API)
+├── tests/check.py          behaviour checks for the script language
 ├── CMakeLists.txt
 └── CMakePresets.json       "linux-gcc-debug" / "linux-gcc-release" presets
 ```
@@ -92,8 +98,12 @@ cmake --build build --target app
 Without CMake:
 
 ```sh
-g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp -o app
+g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp \
+    src/ap_script.cpp -o app
 ```
+
+`python3 tests/check.py` runs the script-language checks (set `CXX` to pick a
+compiler).
 
 The CMake build produces a shared library target `argparser` and, when this
 directory is the top-level project, the demo executable `app`. The demo is added

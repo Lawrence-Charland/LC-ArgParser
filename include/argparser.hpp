@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -45,21 +46,52 @@ enum class ap_result
     invalid_arguments,
 };
 
+// Single source of truth for ap_defkey: the string form of a key is exactly
+// its member name. Add new keys here only.
+#define AP_DEFKEY_LIST(X)                                                      \
+    X(group)                                                                   \
+    X(explanations)                                                            \
+    X(no_consume)                                                              \
+    X(long_name)                                                               \
+    X(short_name)                                                              \
+    X(min_positional_count)                                                    \
+    X(max_positional_count)                                                    \
+    X(barrier)                                                                 \
+    X(no_variadic)                                                             \
+    X(min_value_count)                                                         \
+    X(max_value_count)                                                         \
+    X(max_repetition)
+
 enum class ap_defkey
 {
-    group,
-    explanations,
-    no_consume,
-    long_name,
-    short_name,
-    min_positional_count,
-    max_positional_count,
-    barrier,
-    no_variadic,
-    min_value_count,
-    max_value_count,
-    max_repetition,
+#define AP_DEFKEY_ENUMERATOR(name) name,
+    AP_DEFKEY_LIST(AP_DEFKEY_ENUMERATOR)
+#undef AP_DEFKEY_ENUMERATOR
 };
+
+inline constexpr std::pair<std::string_view, ap_defkey> ap_defkey_names[] = {
+#define AP_DEFKEY_PAIR(name) {#name, ap_defkey::name},
+    AP_DEFKEY_LIST(AP_DEFKEY_PAIR)
+#undef AP_DEFKEY_PAIR
+};
+
+inline constexpr std::string_view defkey_to_string(ap_defkey key)
+{
+    for (const auto &it : ap_defkey_names)
+        if (it.second == key)
+            return it.first;
+    return {};
+}
+
+inline std::optional<ap_defkey> to_defkey(std::string_view name)
+{
+    for (const auto &it : ap_defkey_names)
+        if (it.first == name)
+            return it.second;
+    return std::nullopt;
+}
+
+#undef AP_DEFKEY_LIST
 
 #ifndef AP_DESCRIBE_POSITIONAL_TOO_FEW_ARGS
 #define AP_DESCRIBE_POSITIONAL_TOO_FEW_ARGS "Not enough positional arguments"

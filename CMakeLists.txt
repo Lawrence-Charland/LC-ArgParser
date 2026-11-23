@@ -5,7 +5,7 @@ project(argparser VERSION 0.1.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 
 # lib: argparser
-add_library(argparser SHARED src/argparser.cpp)
+add_library(argparser SHARED src/argparser.cpp src/ap_script.cpp)
 
 target_include_directories(argparser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

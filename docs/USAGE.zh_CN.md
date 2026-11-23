@@ -42,6 +42,7 @@
   - [独占分组](#独占分组)
   - [屏障](#屏障)
 - [12. 综合示例：多子命令解析器](#full-example)
+- [13. 脚本语言](#13-脚本语言)
 
 ## 1. 心智模型
 
@@ -111,6 +112,9 @@ g++ -std=c++17 -Ipath/to/argparser/include \
     main.cpp path/to/argparser/src/argparser.cpp -o app
 ```
 
+使用第 13 节的脚本语言时，请再一并编译
+`path/to/argparser/src/ap_script.cpp`；CMake 目标已经包含它。
+
 安装后的版本提供 `<argparser.hpp>`，链接目标名为 `argparser`。需要 C++17 编译器。
 
 ## 3. 条目类型
@@ -171,6 +175,15 @@ ap_entry(name, type, { {key, value}, ... });
 | `min_value_count` | 整数 `>= 0` | 选项值总数量下限；`> 0` 表示该选项必填 | 后者覆盖 |
 | `max_value_count` | 非零整数 | 选项值总数量上限；负数表示不限 | 后者覆盖 |
 | `max_repetition` | 非零整数 | 标志出现次数上限；负数表示不限 | 后者覆盖 |
+
+键与自身的名称可以双向转换：`to_string(key)` 返回键的拼写，`to_defkey(name)`
+返回 `std::optional<ap_defkey>`（`name` 不是键时为空）。两者都基于公开的
+`ap_defkey_names` 表：
+
+```cpp
+for (const auto &[name, key] : ap_defkey_names)
+    std::cout << name << '\n'; // group、explanations、no_consume……
+```
 
 几个最容易弄错的地方：
 
@@ -788,3 +801,85 @@ int main(int argc, char **argv)
 > **说明：** 上面的解析结构简化自
 > [Tsubaki-Next](https://github.com/Lawrence-Charland/Tsubaki-Next) 的命令行层。
 
+
+## 13. 脚本语言
+
+`<ap_script.hpp>` 可以从一段紧凑的文本脚本构建条目：
+
+```cpp
+#include <ap_script.hpp>
+
+std::vector<ap_entry> entries = argparser::parse_script(script_text);
+ap_instance cli(entries);
+```
+
+```
+script         := block*
+block          := '{' statement-list? '}'
+statement-list := statement (';' statement)* ';'?
+statement      := key '=' value
+key            := "entry_name" | "entry_type" | <ap_defkey 名称>
+value          := 任意不含 ';' 或 '}' 的文本（可以为空）
+```
+
+```
+{
+  entry_name = output;
+  entry_type = option;
+  short_name = o;
+  long_name = output,out;
+  explanations = where to write the result;
+  min_value_count = 1;
+  max_value_count = 1;
+}
+{
+  entry_name = verbose;
+  entry_type = flag;
+  short_name = v,V;
+  long_name = verbose;
+  no_consume = ;
+}
+```
+
+规则：
+
+- 脚本是一串 `{...}` 块，块之间的空白会被忽略；一个块恰好描述一个条目。
+- 语句之间用 `;` 分隔；空语句（包括只有空白的语句）会被跳过，因此结尾多写
+  `;`、插入空行或缩进都没有问题。
+- `key = value` 在**第一个** `=` 处切分。键与值两端的空白会被裁掉，但值内部的
+  空白保留，所以 `explanations = where to write the result` 保存的是
+  `where to write the result`。
+- **没有引号语法。** `"`、`{` 以及后续的 `=` 都是普通字符。`;` 结束语句、`}`
+  结束块，因此值里不能包含这两个字符。
+- 每个块都必须有 `entry_name` 和 `entry_type`。`entry_type` 取
+  `positional`、`option` 或 `flag`。
+- 其余键就是第 4.1 节的 `ap_defkey` 名称，所以 `max_value_count = 1` 等价于
+  `{ap_defkey::max_value_count, "1"}`。键区分大小写。不需要取值的键请写成空值：
+  `no_consume = ;`，或写在块末尾的 `no_consume =`。
+- 没有 `=` 的语句会被当作「空值的键」，所以孤零零一个 `oops` 会因键未知而报错。
+- 重复的键遵循第 4.1 节：名称与 `explanations` 追加，数量类键后者覆盖；重复的
+  `entry_name` 保留最后一个。
+- 条目按块的顺序生成，并且仍然由 `ap_entry` 校验，因此第 4 节的所有规则在这里
+  同样适用。
+
+出错时抛出带 `argparser: ` 前缀的 `std::runtime_error`。脚本层面的消息会指出
+块号（从 `0` 开始，按脚本顺序）：
+
+```text
+argparser: entry #1: "oops" is not a definition key.
+argparser: entry #0: missing "entry_type".
+argparser: entry #0: block opened at offset 0 is missing its closing '}'.
+```
+
+会报错的情况：块之前缺少 `{`、块未闭合、嵌套的 `{{`、语句缺少键（`=1`）、
+`entry_name` 缺失或为空、`entry_type` 缺失、为空或未知、键未知。结构性问题会
+先被报出，因为定位块的步骤在任何语句被读取之前完成：
+`{{entry_name=a;entry_type=flag;}}` 报告的是多出来的第二个块。
+
+由 `ap_entry` 抛出的错误（第 4 节）保留原有措辞，指出的是条目名而不是块号：
+
+```text
+argparser: Error occurred while parsing definition of 'a' :	no_consume is not assignable. Please leave the value empty.
+```
+
+空脚本或只有空白的脚本会得到空 vector。

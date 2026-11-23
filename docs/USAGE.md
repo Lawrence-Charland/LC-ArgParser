@@ -44,6 +44,7 @@ behaves.
   - [Exclusive groups](#exclusive-groups)
   - [Barrier](#barrier)
 - [12. Putting it together: a subcommand parser](#full-example)
+- [13. Script language](#13-script-language)
 
 ## 1. Mental model
 
@@ -115,6 +116,9 @@ g++ -std=c++17 -Ipath/to/argparser/include \
     main.cpp path/to/argparser/src/argparser.cpp -o app
 ```
 
+Add `path/to/argparser/src/ap_script.cpp` if you use the script language from
+[section 13](#13-script-language); the CMake target already includes it.
+
 An installed copy exposes `<argparser.hpp>` and links as `argparser`. A C++17
 compiler is required.
 
@@ -178,6 +182,15 @@ The public fields can be edited after construction:
 | `min_value_count` | integer `>= 0` | minimum total value count; `> 0` makes the option required | last wins |
 | `max_value_count` | non-zero integer | maximum total value count; negative = unlimited | last wins |
 | `max_repetition` | non-zero integer | maximum flag occurrences; negative = unlimited | last wins |
+
+Keys map to their own name in both directions. `to_string(key)` returns the key
+spelling and `to_defkey(name)` returns a `std::optional<ap_defkey>` (empty when
+`name` is not a key). The public `ap_defkey_names` table backs both:
+
+```cpp
+for (const auto &[name, key] : ap_defkey_names)
+    std::cout << name << '\n'; // group, explanations, no_consume, ...
+```
 
 Notes that are easy to get wrong:
 
@@ -853,3 +866,92 @@ What to notice:
 > **Note:** the structure above is a simplified version of the command-line
 > layer in [Tsubaki-Next](https://github.com/Lawrence-Charland/Tsubaki-Next).
 
+
+## 13. Script language
+
+`<ap_script.hpp>` builds entries from a compact text script:
+
+```cpp
+#include <ap_script.hpp>
+
+std::vector<ap_entry> entries = argparser::parse_script(script_text);
+ap_instance cli(entries);
+```
+
+```
+script         := block*
+block          := '{' statement-list? '}'
+statement-list := statement (';' statement)* ';'?
+statement      := key '=' value
+key            := "entry_name" | "entry_type" | <ap_defkey name>
+value          := any text without ';' or '}' (may be empty)
+```
+
+```
+{
+  entry_name = output;
+  entry_type = option;
+  short_name = o;
+  long_name = output,out;
+  explanations = where to write the result;
+  min_value_count = 1;
+  max_value_count = 1;
+}
+{
+  entry_name = verbose;
+  entry_type = flag;
+  short_name = v,V;
+  long_name = verbose;
+  no_consume = ;
+}
+```
+
+Rules:
+
+- The script is a sequence of `{...}` blocks. Whitespace between blocks is
+  ignored, and a block describes exactly one entry.
+- Statements are separated by `;`; empty statements, including whitespace-only
+  ones, are skipped. Trailing `;`, blank lines and indentation are all fine.
+- `key = value` splits at the **first** `=`. Whitespace around the key and the
+  value is trimmed, while whitespace inside the value is kept, so
+  `explanations = where to write the result` stores
+  `where to write the result`.
+- **There is no quote syntax.** `"`, `{` and any further `=` are ordinary
+  characters. `;` ends the statement and `}` ends the block, so a value cannot
+  contain either of them.
+- `entry_name` and `entry_type` are required in every block. `entry_type` is
+  `positional`, `option` or `flag`.
+- Every other key is an `ap_defkey` name from section 4.1, so
+  `max_value_count = 1` is the same as `{ap_defkey::max_value_count, "1"}`.
+  Keys are case-sensitive. Keys that take no value are written with an empty
+  value: `no_consume = ;` or `no_consume =` at the end of a block.
+- A statement without `=` is read as a key with an empty value, so a bare
+  `oops` fails as an unknown key.
+- Repeated keys follow section 4.1: names and `explanations` append, counts keep
+  the last value. A repeated `entry_name` keeps the last spelling.
+- Entries appear in block order, and every entry is still validated by
+  `ap_entry`, so all rules of section 4 apply here too.
+
+Errors throw `std::runtime_error` with the `argparser: ` prefix. Script-level
+messages name the block, numbered from `0` in script order:
+
+```text
+argparser: entry #1: "oops" is not a definition key.
+argparser: entry #0: missing "entry_type".
+argparser: entry #0: block opened at offset 0 is missing its closing '}'.
+```
+
+The reported cases are: a missing `{` before a block, an unclosed block, a
+nested `{{`, a statement without a key (`=1`), a missing or empty `entry_name`,
+a missing, empty or unknown `entry_type`, and an unknown key. Structural
+problems are found first, because the blocks are located before any statement
+is read: `{{entry_name=a;entry_type=flag;}}` reports the stray second block.
+
+Errors raised by `ap_entry` (section 4) keep their own wording and name the
+entry rather than the block:
+
+```text
+argparser: Error occurred while parsing definition of 'a' :	no_consume is not assignable. Please leave the value empty.
+```
+
+An empty or whitespace-only script yields an empty vector.

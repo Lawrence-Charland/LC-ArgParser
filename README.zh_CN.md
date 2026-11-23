@@ -34,6 +34,10 @@
 
 - 可替换的错误提示：`describe()` 以及可覆盖的 `AP_DESCRIBE_*` 宏。
 
+- 脚本语言：`<ap_script.hpp>` 通过 `parse_script(text)` 从一段紧凑的文本脚本构建
+  条目，键就是 `ap_defkey` 名称本身，见
+  [使用指南第 13 节](./docs/USAGE.zh_CN.md#13-脚本语言)。
+
 - 专门的使用指南：[USAGE.md](./docs/USAGE.md)（英文）与 [USAGE.zh_CN.md](./docs/USAGE.zh_CN.md)（简体中文）。
 
 ## 环境要求
@@ -47,10 +51,13 @@
 ```
 argparser/
 ├── include/argparser.hpp   公共头文件：声明
+├── include/ap_script.hpp   脚本语言：parse_script()
 ├── docs/USAGE.md           使用指南（英文）
 ├── docs/USAGE.zh_CN.md     使用指南（简体中文）
 ├── src/argparser.cpp       实现
+├── src/ap_script.cpp       脚本语言实现
 ├── src/main.cpp            手工测试用的临时驱动程序（不属于 API）
+├── tests/check.py          脚本语言的行为测试
 ├── CMakeLists.txt
 └── CMakePresets.json       "linux-gcc-debug" / "linux-gcc-release" 预设
 ```
@@ -86,8 +93,11 @@ cmake --build build --target app
 不使用 CMake：
 
 ```
-g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp -o app
+g++ -std=c++17 -Iinclude src/main.cpp src/argparser.cpp \
+    src/ap_script.cpp -o app
 ```
+
+`python3 tests/check.py` 会运行脚本语言的行为测试（可用 `CXX` 指定编译器）。
 
 CMake 构建会生成共享库目标 `argparser`，并且只有当本目录就是顶层项目时才会额外
 生成示例可执行文件 `app`；用 `add_subdirectory` 引入时则只提供库目标。
