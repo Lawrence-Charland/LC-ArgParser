@@ -372,6 +372,55 @@ void test_integration()
           command.entry("files").content.size() == 2);
     check("integration: no leftovers", command.fine(false));
 }
+void test_forced_simple()
+{
+    // A word after '--' stays literal even when a name matches it.
+    ap_instance app({
+        ap_entry("verbose", ap_type::flag,
+                 {{ap_defkey::long_name, "verbose"}}),
+        ap_entry("files", ap_type::positional, {}),
+    });
+    app.pre_parse({"app", "--verbose", "--", "--verbose", "-v"});
+    app.evaluate();
+    check("forced_simple: option before the separator matches",
+          app.entry("verbose").repetition == 1,
+          std::to_string(app.entry("verbose").repetition));
+    check("forced_simple: words after the separator stay literal",
+          app.entry("files").content ==
+              std::vector<std::string>{"--verbose", "-v"},
+          std::to_string(app.entry("files").content.size()));
+    check("forced_simple: no leftovers", app.fine(false));
+
+    // A post-separator word is still a value for a preceding option.
+    ap_instance value(
+        {ap_entry("out", ap_type::option, {{ap_defkey::short_name, "o"}})});
+    value.pre_parse({"app", "-o", "--", "a"});
+    value.evaluate();
+    check("forced_simple: option still takes a post-separator value",
+          value.entry("out").content == std::vector<std::string>{"a"});
+
+    // reparse() must not retokenize words taken after '--'.
+    ap_instance dynamic({ap_entry("files", ap_type::positional, {})});
+    dynamic.pre_parse({"app", "--", "--late"});
+    dynamic.add_entry(ap_entry("late", ap_type::flag,
+                               {{ap_defkey::long_name, "late"}}));
+    dynamic.reparse();
+    dynamic.evaluate();
+    check("forced_simple: reparse leaves post-separator words literal",
+          dynamic.entry("late").repetition == 0 &&
+              dynamic.entry("files").content ==
+                  std::vector<std::string>{"--late"});
+
+    // A word before '--' is still re-examined by reparse().
+    ap_instance early({ap_entry("files", ap_type::positional, {})});
+    early.pre_parse({"app", "--early"});
+    early.add_entry(ap_entry("early", ap_type::flag,
+                             {{ap_defkey::long_name, "early"}}));
+    early.reparse();
+    early.evaluate();
+    check("forced_simple: reparse still recognizes words before the separator",
+          early.entry("early").repetition == 1);
+}
 } // namespace
 
 int main()
@@ -384,6 +433,7 @@ int main()
     test_definition_keys();
     test_bijection();
     test_integration();
+    test_forced_simple();
     std::cout << "\nchecks=" << checks << " failures=" << failures << '\n';
     return failures == 0 ? 0 : 1;
 }

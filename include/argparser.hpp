@@ -22,6 +22,7 @@ inline constexpr const char *default_group = "default";
 enum class ap_arg_style
 {
     simple,
+    forced_simple,
     single_dash,
     double_dash,
     argv_zero,

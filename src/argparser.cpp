@@ -49,12 +49,6 @@ static std::vector<std::string> separate(const std::string &values,
     return result;
 }
 
-/**
- * @brief       Splits `value` at the first `=`.
- * @param       value           The string to split.
- * @return      The part before `=` and the part after it. The second part is
- * empty when `value` contains no `=`.
- */
 static std::pair<std::string, std::string> equation(const std::string &value)
 {
     std::size_t breakpt = value.find('=');
@@ -62,6 +56,12 @@ static std::pair<std::string, std::string> equation(const std::string &value)
         return {value, ""};
     else
         return {value.substr(0, breakpt), value.substr(breakpt + 1)};
+}
+
+static bool is_literal(ap_arg_style style)
+{
+    return style == ap_arg_style::simple ||
+           style == ap_arg_style::forced_simple;
 }
 
 /**
@@ -241,9 +241,11 @@ void ap_instance::pre_parse(const std::vector<std::string> &argv)
     {
         if (argv[i] == "--") // Separator
         {
-            // Everything past the separator is taken literally.
+            // Everything past the separator is taken literally and must stay
+            // that way through `reparse()`.
             for (i++; i < argv.size(); i++)
-                args.emplace_back(argv[i], argv[i], ap_arg_style::simple);
+                args.emplace_back(argv[i], argv[i],
+                                  ap_arg_style::forced_simple);
             break;
         }
         for (auto &it : tokenize(argv[i]))
@@ -325,6 +327,7 @@ void ap_instance::reparse()
     build_registries();
     for (auto token = args.begin(); token != args.end();)
     {
+        // `forced_simple` words were taken after `--`; leave them alone.
         if (token->style == ap_arg_style::simple)
         {
             auto retokenize = tokenize(token->token);
@@ -396,7 +399,7 @@ void ap_instance::evaluate_entry(ap_entry &entry)
                 {
                     for (it++; it != args.end(); it++)
                     {
-                        if (it->style != ap_arg_style::simple ||
+                        if (!is_literal(it->style) ||
                             counter == entry.valcnt_range.second)
                         { // Boundary
                             it--;
@@ -422,7 +425,7 @@ void ap_instance::evaluate_entry(ap_entry &entry)
         for (; it != args.end() &&
                counter < static_cast<unsigned>(entry.positional_range.second);
              it++)
-            if (it->style == ap_arg_style::simple)
+            if (is_literal(it->style))
             {
                 if (entry.barriers.find(it->token) != entry.barriers.end())
                 {
@@ -439,7 +442,7 @@ void ap_instance::evaluate_entry(ap_entry &entry)
         // per entry.
         if (barrier_hit == false)
             for (; it != args.end(); it++)
-                if (it->style == ap_arg_style::simple &&
+                if (is_literal(it->style) &&
                     entry.barriers.find(it->token) != entry.barriers.end())
                 {
                     consumption.push_back(it);

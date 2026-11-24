@@ -155,7 +155,7 @@ input: Not enough positional arguments
 
 ## 解析流程
 
-1. `pre_parse(argc, argv)` 复制 `argv` 并转发给 `pre_parse(const std::vector<std::string> &)`，由后者为每个词元标记 `ap_arg_style`（`argv_zero`、`simple`、`single_dash`、`double_dash`），并根据当前有效条目重建名称登记表。参数不是来自 `main` 时可直接使用 vector 重载：
+1. `pre_parse(argc, argv)` 复制 `argv` 并转发给 `pre_parse(const std::vector<std::string> &)`，由后者为每个词元标记 `ap_arg_style`（`argv_zero`、`simple`、`forced_simple`、`single_dash`、`double_dash`），并根据当前有效条目重建名称登记表。参数不是来自 `main` 时可直接使用 vector 重载：
 
    ```
    app.pre_parse({"app", "-v", "--output=out.txt", "a.txt"});
@@ -216,7 +216,7 @@ if (app.entry("head").content[0] == "subA")
 | `--verbose` | 长标志 |
 | `--output=out.txt` | 使用 `=value` 的长选项 |
 | `--output out.txt` | 长选项 + 独立的值 |
-| `--` | 选项结束；其后的内容全部按位置参数处理 |
+| `--` | 选项结束；其后的内容全部按字面量值处理 |
 | `-` | 位置参数值（单独的短横线不是选项） |
 
 
@@ -263,7 +263,7 @@ app.evaluate();
 - 空值会被拒绝：`{ap_defkey::barrier, ""}` 会让构造函数抛出 `std::runtime_error`。
 
 - `--` 不能作为屏障，因为预处理阶段就把它删掉了。`--` 之后的每个参数都是
-  `simple`，因此屏障在那种位置可以看起来像选项，例如 `-x`。
+  `forced_simple`，因此屏障在那种位置可以看起来像选项，例如 `-x`。
 
 - 屏障之后剩下的参数只是「未被消耗」：默认 `fine()` 仍返回 `true`，而
   `fine(false)` 与 `errors()` 会报告它们。
@@ -385,7 +385,7 @@ const ap_entry &verbose = app.entry("verbose");
 
 - **先调用 `pre_parse`，再调用任何形式的 `evaluate` 方法。如果某次求值之后添加 、修改了任何条目，再次求值之前也必须调用 `pre_parse` 或 `reparse()`。** 首次 `pre_parse` 之前调用 `argv_zero()` 属于未定义行为。
 
-- **`reparse()` 会重新审视每个 `simple` 词元**，包括 `--` 之后按字面量处理的词，以及看起来像选项的选项值。它不会改动已有结果与 `argv[0]`。
+- **`reparse()` 会重新审视每个 `simple` 词元**，包括看起来像选项的选项值，但绝不包括 `--` 之后按字面量处理的 `forced_simple` 词。它不会改动已有结果与 `argv[0]`。
 
 - **`evaluate` 不会清空上一次的结果。** `content` 与 `repetition` 会累加； 想重新开始请调用 `reset_results()` 并重新 `pre_parse`。
 

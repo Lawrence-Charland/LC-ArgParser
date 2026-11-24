@@ -167,7 +167,8 @@ input: Not enough positional arguments
 
 1. `pre_parse(argc, argv)` copies `argv` and forwards it to
    `pre_parse(const std::vector<std::string> &)`, which marks every token with
-   an `ap_arg_style` (`argv_zero`, `simple`, `single_dash`, `double_dash`) and
+   an `ap_arg_style` (`argv_zero`, `simple`, `forced_simple`, `single_dash`,
+   `double_dash`) and
    rebuilds the name registries from the active entries. Use the vector
    overload when the arguments do not come from `main`:
 
@@ -234,7 +235,7 @@ are required because `min_value_count` is `1`:
 | `--verbose`          | long flag                                         |
 | `--output=out.txt`   | long option with `=value`                         |
 | `--output out.txt`   | long option with a separate value                 |
-| `--`                 | end of options; everything after it is positional |
+| `--`                 | end of options; everything after it stays literal |
 | `-`                  | positional value (a lone dash is not an option)   |
 
 ## Barriers
@@ -280,8 +281,8 @@ Details worth knowing:
 - An empty barrier is rejected: `{ap_defkey::barrier, ""}` makes the
   constructor throw `std::runtime_error`.
 - `--` cannot serve as a barrier, because the preparser removes it before the
-  entries are evaluated. Every argument after `--` is `simple`, so a barrier may
-  look like an option there, e.g. `-x`.
+  entries are evaluated. Every argument after `--` is `forced_simple`, so a
+  barrier may look like an option there, e.g. `-x`.
 - Leftover arguments after a barrier are simply unconsumed: `fine()` still
   returns `true` by default, while `fine(false)` and `errors()` report them.
 
@@ -413,9 +414,9 @@ Available macros: `AP_DESCRIBE_POSITIONAL_TOO_FEW_ARGS`,
   absent, the entry reports `option_too_few_values`.
 - **Call `pre_parse` before `evaluate`.** `argv_zero()` before the first
   `pre_parse` is undefined behaviour.
-- **`reparse()` revisits every `simple` token**, including words taken literally
-  after `--` and option values that look like options. It keeps results and
-  `argv[0]` untouched.
+- **`reparse()` revisits every `simple` token**, including option values that
+  look like options, but never a `forced_simple` word taken after `--`. It keeps
+  results and `argv[0]` untouched.
 - **`evaluate` does not clear previous results.** `content` and `repetition`
   accumulate; call `reset_results()` and `pre_parse` again to start over.
 - **`entry(index)` performs no bounds check** — an out-of-range index is

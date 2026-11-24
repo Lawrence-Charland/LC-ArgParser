@@ -253,6 +253,7 @@ recorded as the program name (`ap_arg_style::argv_zero`).
 | --- | --- |
 | `argv_zero` | the program name; never matched by an entry |
 | `simple` | a positional value, an option value, or an unrecognized word |
+| `forced_simple` | a literal word taken after `--`; a value that is never re-tokenized |
 | `single_dash` | a short option/flag, a bundled short group, or a sticky value |
 | `double_dash` | a long option/flag, optionally with `=value` |
 
@@ -266,7 +267,7 @@ recorded as the program name (`ap_arg_style::argv_zero`).
 | `--verbose` | `double_dash` `verbose` |
 | `--output=out.txt` | `double_dash` `output=out.txt` |
 | `--output out.txt` | `double_dash` `output`, then `simple` `out.txt` |
-| `--` | dropped; every following word becomes `simple` |
+| `--` | dropped; every following word becomes `forced_simple` |
 | `-` | `simple` |
 | `--unknown` | `simple` `--unknown` if no active entry registered that long name |
 | `-q` | `simple` `-q` if `q` is not a registered short name |
@@ -286,10 +287,12 @@ Pre-parsing rules worth knowing:
 - An unknown character after at least one known flag is attached to the
   preceding flag as an unexpected value: with `v` registered as a flag, `-vX`
   becomes `v=X`, so the flag reports `flag_unexpected_values`.
-- `--` is removed. It does not prevent an option from taking the next `simple`
-  token as a value: with `-o` as a value-taking option, `-o -- a` yields
-  `content == {"a"}`. Entry order decides whether a positional can claim such a
-  token first.
+- `--` is removed, and every following word is marked `forced_simple` instead
+  of `simple`. A `forced_simple` word is still a literal value, but it never
+  becomes an option token, even in a later `reparse()`. It does not prevent an
+  option from taking the next literal token as a value: with `-o` as a
+  value-taking option, `-o -- a` yields `content == {"a"}`. Entry order decides
+  whether a positional can claim such a token first.
 - A lone `-` is `simple`, so it can be a positional or an option value.
 
 ### 5.2 Re-parsing
@@ -303,8 +306,8 @@ only the `simple` tokens. A word that stayed `simple` at the last `pre_parse`
 because its name was not registered stays in the pool, and is tokenized again
 now, so added or renamed options are recognized without discarding anything the
 preparser already understood. Tokens already classified as `single_dash` /
-`double_dash`, and `argv[0]`, are left untouched, and the order of the pool is
-preserved.
+`double_dash`, `forced_simple` words taken after `--`, and `argv[0]`, are left
+untouched, and the order of the pool is preserved.
 
 Typical use is a dynamic entry table: parse once, change the entries, then
 `reparse()` before evaluating.
@@ -320,10 +323,9 @@ app.evaluate();
 
 - `reparse()` does not reset results, does not touch `argv[0]`, and is
   idempotent: a `simple` word that still matches no name stays as it is.
-- The pool does not remember where a `--` separator was dropped, so a word taken
-  literally after `--` is `simple` and is re-examined as well; it can turn into
-  an option. If a literal region must stay literal, run `pre_parse` again with
-  the same arguments instead of calling `reparse()`.
+- Words taken literally after `--` are `forced_simple`, so `reparse()` never
+  re-examines them; the literal region they belong to survives a registry
+  rebuild.
 - Option values that look like option words are `simple` tokens too and follow
   the same rule. Call `reparse()` before `evaluate()`, while no value is bound
   yet.
@@ -368,8 +370,9 @@ values, unless `consume` is `false`.
 Values are collected in two ways:
 
 - **Attached:** `-ovalue` and `--opt=value` produce one value directly.
-- **Separate:** after a bare `-o` / `--opt`, every following `simple` token is
-  collected until a non-`simple` token or the maximum count is reached.
+- **Separate:** after a bare `-o` / `--opt`, every following literal (`simple`
+  or `forced_simple`) token is collected until a non-literal token or the
+  maximum count is reached.
 
 A short option takes *everything* after its name as the attached value, so
 `-o=value` records `"=value"`, not `"value"`. Use `-o value` or `--opt=value`
@@ -432,15 +435,15 @@ values:
 
 ### 6.4 Positionals and barriers
 
-A positional collects `simple` tokens from the beginning of the pool, in order,
-until:
+A positional collects literal (`simple` and `forced_simple`) tokens from the
+beginning of the pool, in order, until:
 
 - the maximum count is reached, or
 - a registered barrier is met.
 
 Rules:
 
-- Only `simple` tokens are collected. Values consumed by an earlier option are
+- Only literal tokens are collected. Values consumed by an earlier option are
   not available.
 - There is no "too many positionals" error. Excess words stay in the pool.
 - If the collected count is below `min_positional_count`, the entry reports
@@ -452,7 +455,7 @@ Rules:
   finds, without adding it to `content`.
 - The barrier token is consumed with the entry unless `consume` is `false`.
 - `--` cannot be a barrier (it is removed by pre-parsing). Because everything
-  after `--` is `simple`, an option-looking word there can be a barrier.
+  after `--` is `forced_simple`, an option-looking word there can be a barrier.
 - `barrier` values are not split at `,`; repeat the key for several tokens.
 
 ```cpp
@@ -634,8 +637,8 @@ that are not already defined.
   `fine()`.
 - **`--` only changes styles.** An option evaluated before a positional can
   still take a post-`--` token as its value (`-o -- a` → `"a"`).
-- **`reparse()` revisits every `simple` token**, including words taken literally
-  after `--` and option values that look like options; see
+- **`reparse()` revisits every `simple` token**, including option values that
+  look like options, but never a `forced_simple` word taken after `--`; see
   [Re-parsing](#52-re-parsing). It never resets results.
 - **Short bundles have sharp edges.** `-ofile.txt` is an attached value, but
   `-vX` with `X` unregistered becomes a flag occurrence with an unexpected
