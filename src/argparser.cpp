@@ -566,11 +566,13 @@ const std::string_view ap_instance::argv_zero()
 
 std::unordered_set<std::string> ap_instance::ls_options()
 {
+    build_registries();
     std::unordered_set<std::string> result;
     for (auto &look : short_options)
         result.insert(std::string("-") + look.first);
     for (auto &look : long_options)
         result.insert("--" + look);
+    return result;
 }
 
 /**
