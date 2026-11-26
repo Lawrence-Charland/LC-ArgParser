@@ -210,6 +210,7 @@ class ap_instance
     ap_entry &entry_mutable(std::size_t index);
     std::size_t get_index(const std::string &name);
     const std::string_view argv_zero();
+    std::unordered_set<std::string> ls_options();
 };
 
 } // namespace argparser

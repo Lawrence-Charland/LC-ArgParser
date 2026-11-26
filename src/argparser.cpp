@@ -12,6 +12,7 @@
 
 #include <argparser.hpp>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace argparser
@@ -561,6 +562,15 @@ std::size_t ap_instance::get_index(const std::string &name)
 const std::string_view ap_instance::argv_zero()
 {
     return args.begin()->token;
+}
+
+std::unordered_set<std::string> ap_instance::ls_options()
+{
+    std::unordered_set<std::string> result;
+    for (auto &look : short_options)
+        result.insert(std::string("-") + look.first);
+    for (auto &look : long_options)
+        result.insert("--" + look);
 }
 
 /**
